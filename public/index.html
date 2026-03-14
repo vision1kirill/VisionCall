@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionCall</title>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+
+<body class="home">
+
+<div class="join-card">
+
+<h1>VisionCall</h1>
+
+<input id="nickname" placeholder="Никнейм">
+<input id="room" placeholder="Комната">
+
+<div class="emoji-picker">
+
+<span class="emoji selected">😀</span>
+<span class="emoji">😎</span>
+<span class="emoji">🤖</span>
+<span class="emoji">👾</span>
+<span class="emoji">🐱</span>
+<span class="emoji">🐼</span>
+<span class="emoji">🦊</span>
+<span class="emoji">🐸</span>
+
+</div>
+
+<input type="hidden" id="avatar" value="😀">
+
+<button class="join-btn" onclick="joinRoom()">Войти</button>
+
+</div>
+
+<script>
+
+const emojis = document.querySelectorAll(".emoji");
+
+emojis.forEach(e=>{
+
+e.onclick=()=>{
+
+emojis.forEach(x=>x.classList.remove("selected"));
+
+e.classList.add("selected");
+
+document.getElementById("avatar").value=e.innerText;
+
+};
+
+});
+
+function joinRoom(){
+
+const name=document.getElementById("nickname").value;
+const room=document.getElementById("room").value;
+const avatar=document.getElementById("avatar").value;
+
+if(name===""||room===""){
+alert("Введите данные");
+return;
+}
+
+window.location=`/room.html?room=${room}&name=${name}&avatar=${avatar}`;
+
+}
+
+</script>
+
+</body>
+</html>

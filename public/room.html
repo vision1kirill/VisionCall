@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionCall</title>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="topbar">
+
+<div class="logo">VisionCall</div>
+
+<div class="room-id">
+Комната: <span id="roomTitle"></span>
+</div>
+
+<div></div>
+
+</div>
+
+
+<div class="main">
+
+<div class="video-grid" id="videoGrid"></div>
+
+<div class="sidebar">
+
+<div class="participants">
+
+<h3>Участники</h3>
+
+<div id="participants"></div>
+
+</div>
+
+<div class="chat">
+
+<div id="messages"></div>
+
+<div class="chat-input">
+
+<input id="msgInput" placeholder="Сообщение">
+
+<button id="sendBtn">➤</button>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<div class="controls">
+
+<button id="micBtn">🎤</button>
+
+<button id="camBtn">📷</button>
+
+<button id="screenBtn">🖥</button>
+
+<button id="leaveBtn">🚪</button>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+<script src="chat.js"></script>
+
+</body>
+</html>
