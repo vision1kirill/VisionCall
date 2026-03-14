@@ -1,7 +1,6 @@
 const socket = io();
 
 const params = new URLSearchParams(window.location.search);
-
 const room = params.get("room");
 const name = params.get("name");
 const avatar = params.get("avatar") || "🙂";
@@ -20,14 +19,17 @@ const copyBtn = document.getElementById("copyBtn");
 
 let localStream = null;
 let screenStream = null;
-let peerConnections = {};
-const peerMeta = {}; // { socketId: { name, avatar } }
+const peerConnections = {};
+const peerMeta = {};
+
+// Флаги для обнаружения коллизий offer/answer (perfect negotiation)
+const makingOffer = {};
 
 let micEnabled = false;
 let camEnabled = false;
 let screenEnabled = false;
 
-// ICE серверы: STUN + TURN для надёжного соединения через NAT/фаерволы
+// ICE: STUN + TURN серверы для работы через NAT/фаерволы
 const servers = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -104,10 +106,7 @@ function showVideoInBox(id, stream, muted, isScreen) {
     video.muted = muted;
     video.srcObject = stream;
     video.playsInline = true;
-
-    if (isScreen) {
-        video.classList.add("screen-video");
-    }
+    if (isScreen) video.classList.add("screen-video");
 
     const label = document.getElementById("label-" + id);
     box.insertBefore(video, label);
@@ -137,6 +136,8 @@ function removeVideoBox(id) {
         peerConnections[id].close();
         delete peerConnections[id];
     }
+    delete makingOffer[id];
+    delete peerMeta[id];
 }
 
 /* ── LOCAL BOX ── */
@@ -182,16 +183,34 @@ async function startCamera() {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
         localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
-
-        Object.values(peerConnections).forEach(pc => {
-            localStream.getTracks().forEach(track => {
-                const alreadyAdded = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
-                if (!alreadyAdded) pc.addTrack(track, localStream);
-            });
-        });
-
     } catch (e) {
         alert("Не удалось получить доступ к камере/микрофону: " + e.message);
+    }
+}
+
+/* ── ДОБАВИТЬ ТРЕК ВО ВСЕ СОЕДИНЕНИЯ ──
+   Заменяем если трек такого типа уже есть, иначе добавляем новый.
+   При добавлении нового трека onnegotiationneeded срабатывает автоматически. */
+
+function addTrackToPeers(track, stream) {
+    for (const [id, pc] of Object.entries(peerConnections)) {
+        const existingSender = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
+        if (existingSender) {
+            existingSender.replaceTrack(track).catch(e => console.error("replaceTrack:", e));
+        } else {
+            pc.addTrack(track, stream);
+            // onnegotiationneeded запустится автоматически
+        }
+    }
+}
+
+function removeTrackFromPeers(kind) {
+    for (const [id, pc] of Object.entries(peerConnections)) {
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === kind);
+        if (sender) {
+            pc.removeTrack(sender);
+            // onnegotiationneeded запустится автоматически
+        }
     }
 }
 
@@ -201,6 +220,23 @@ function createPeer(id) {
     if (peerConnections[id]) return peerConnections[id];
 
     const pc = new RTCPeerConnection(servers);
+    makingOffer[id] = false;
+
+    // Автоматическая перестройка соединения при добавлении новых треков
+    pc.onnegotiationneeded = async () => {
+        try {
+            makingOffer[id] = true;
+            const offer = await pc.createOffer();
+            // Убеждаемся что состояние не изменилось пока мы await-или
+            if (pc.signalingState !== "stable") return;
+            await pc.setLocalDescription(offer);
+            socket.emit("offer", { offer: pc.localDescription, to: id });
+        } catch (e) {
+            console.error("onnegotiationneeded error:", e);
+        } finally {
+            makingOffer[id] = false;
+        }
+    };
 
     pc.ontrack = e => {
         const meta = peerMeta[id] || { name: "Участник", avatar: "🙂" };
@@ -218,7 +254,11 @@ function createPeer(id) {
 
     pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
-        if (state === "disconnected" || state === "failed" || state === "closed") {
+        if (state === "failed") {
+            // Попытка перезапуска ICE при сбое
+            pc.restartIce();
+        }
+        if (state === "closed") {
             removeVideoBox(id);
         }
     };
@@ -231,88 +271,125 @@ function createPeer(id) {
 
 socket.emit("join-room", { room, name, avatar });
 
-// Получаем список участников, которые уже были в комнате до нас
-socket.on("room-users", async existingUsers => {
+// Получили список тех, кто УЖЕ в комнате.
+// Мы — новый участник, они создадут offer'ы нам через user-connected на своей стороне.
+// Нам нужно только подготовить peer-соединения и показать их в UI.
+socket.on("room-users", existingUsers => {
     for (const user of existingUsers) {
         peerMeta[user.id] = { name: user.name, avatar: user.avatar };
         addParticipant(user.id, user.name);
         createVideoBox(user.id, user.name, user.avatar);
-
-        const pc = createPeer(user.id);
-        if (localStream) {
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-        }
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit("offer", { offer, to: user.id });
+        createPeer(user.id); // готовим соединение, offer придёт от них
     }
 });
 
-// Новый участник подключился после нас
+// Кто-то новый зашёл в комнату — МЫ (уже существующий участник) создаём offer
 socket.on("user-connected", async data => {
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "🙂" };
     addParticipant(data.id, data.name);
     createVideoBox(data.id, data.name, data.avatar || "🙂");
 
     const pc = createPeer(data.id);
+
+    // Добавляем текущие треки — это автоматически запустит onnegotiationneeded
     if (localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        localStream.getTracks().forEach(track => {
+            if (!pc.getSenders().find(s => s.track === track)) {
+                pc.addTrack(track, localStream);
+            }
+        });
     }
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("offer", { offer, to: data.id });
+    // Если треков нет — всё равно нужно создать соединение с offer
+    if (!localStream || pc.getSenders().length === 0) {
+        try {
+            makingOffer[data.id] = true;
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit("offer", { offer: pc.localDescription, to: data.id });
+        } catch (e) {
+            console.error("Initial offer error:", e);
+        } finally {
+            makingOffer[data.id] = false;
+        }
+    }
+    // Если треки добавлены — onnegotiationneeded сам создаст offer
 });
 
+// Получили offer — обрабатываем с защитой от коллизий (perfect negotiation)
 socket.on("offer", async data => {
-    // Сохраняем имя/аватар из offer (сервер его прокидывает)
     if (data.name) {
         peerMeta[data.from] = { name: data.name, avatar: data.avatar || "🙂" };
         if (!document.getElementById("box-" + data.from)) {
             createVideoBox(data.from, data.name, data.avatar || "🙂");
             addParticipant(data.from, data.name);
         } else {
-            const existingLabel = document.getElementById("label-" + data.from);
-            if (existingLabel) {
-                existingLabel.innerHTML = `${data.name} <span class="icon mic">🔇</span><span class="icon cam">🚫</span>`;
+            const label = document.getElementById("label-" + data.from);
+            if (label) {
+                label.innerHTML = `${data.name} <span class="icon mic">🔇</span><span class="icon cam">🚫</span>`;
             }
         }
     }
 
     const pc = createPeer(data.from);
+
+    // Обнаружение коллизии: мы тоже пытаемся создать offer к этому же пиру
+    const collision = makingOffer[data.from] || pc.signalingState !== "stable";
+
+    if (collision) {
+        // Полите-пир (с большим socket.id) уступает: откатывает свой offer
+        // Имполите-пир (с меньшим socket.id) игнорирует чужой offer
+        const polite = socket.id > data.from;
+        if (!polite) {
+            console.log("Collision: ignoring offer from", data.from);
+            return;
+        }
+        // Мы — полите, откатываем наш offer
+        try {
+            await pc.setLocalDescription({ type: "rollback" });
+        } catch (e) {
+            // Rollback не поддерживается в старых браузерах
+            console.warn("Rollback not supported, ignoring offer:", e);
+            return;
+        }
+    }
+
+    // Добавляем свои треки в это соединение
     if (localStream) {
         localStream.getTracks().forEach(track => {
-            const alreadyAdded = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
-            if (!alreadyAdded) pc.addTrack(track, localStream);
+            if (!pc.getSenders().find(s => s.track === track)) {
+                pc.addTrack(track, localStream);
+            }
         });
     }
 
     await pc.setRemoteDescription(data.offer);
+
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    socket.emit("answer", { answer, to: data.from });
+    socket.emit("answer", { answer: pc.localDescription, to: data.from });
 });
 
 socket.on("answer", async data => {
     const pc = peerConnections[data.from];
-    if (pc) {
+    if (!pc) return;
+    // Принимаем answer только если ждём его
+    if (pc.signalingState === "have-local-offer") {
         try {
             await pc.setRemoteDescription(data.answer);
         } catch (e) {
-            console.error("Ошибка установки answer:", e);
+            console.error("setRemoteDescription answer error:", e);
         }
     }
 });
 
 socket.on("ice-candidate", async data => {
     const pc = peerConnections[data.from];
-    if (pc) {
-        try {
-            await pc.addIceCandidate(data.candidate);
-        } catch (e) {
-            console.error("ICE candidate error:", e);
-        }
+    if (!pc) return;
+    try {
+        await pc.addIceCandidate(data.candidate);
+    } catch (e) {
+        // Игнорируем если пир уже закрыт
     }
 });
 
@@ -320,7 +397,7 @@ socket.on("user-disconnected", data => {
     removeVideoBox(data.id);
 });
 
-// Когда у участника начинается/заканчивается демонстрация экрана
+// Демонстрация экрана у другого участника: переключаем object-fit
 socket.on("screen-share-state", data => {
     const box = document.getElementById("box-" + data.from);
     if (!box) return;
@@ -359,7 +436,12 @@ micBtn.onclick = async () => {
     if (!localStream) return;
 
     micEnabled = !micEnabled;
-    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+    localStream.getAudioTracks().forEach(t => {
+        t.enabled = micEnabled;
+        // Добавляем трек в соединения если ещё не добавлен
+        addTrackToPeers(t, localStream);
+    });
+
     micBtn.innerText = micEnabled ? "🎤" : "🔇";
     micBtn.style.background = micEnabled ? "#22c55e" : "";
     updateLabelIcons("local", micEnabled, camEnabled);
@@ -373,7 +455,11 @@ camBtn.onclick = async () => {
     if (!localStream) return;
 
     camEnabled = !camEnabled;
-    localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+    localStream.getVideoTracks().forEach(t => {
+        t.enabled = camEnabled;
+        addTrackToPeers(t, localStream);
+    });
+
     camBtn.innerText = camEnabled ? "📷" : "🚫";
     camBtn.style.background = camEnabled ? "#22c55e" : "";
     updateLabelIcons("local", micEnabled, camEnabled);
@@ -400,20 +486,21 @@ screenBtn.onclick = async () => {
 
         socket.emit("screen-share-state", { sharing: false });
 
+        // Возвращаем камеру вместо экрана
+        if (localStream) {
+            const camTrack = localStream.getVideoTracks()[0];
+            if (camTrack) {
+                for (const [id, pc] of Object.entries(peerConnections)) {
+                    const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+                    if (sender) sender.replaceTrack(camTrack).catch(() => {});
+                }
+            }
+        }
+
         if (camEnabled && localStream) {
             showVideoInBox("local", localStream, true, false);
         } else {
             showAvatarInBox("local", avatar);
-        }
-
-        if (localStream) {
-            const camTrack = localStream.getVideoTracks()[0];
-            if (camTrack) {
-                Object.values(peerConnections).forEach(pc => {
-                    const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-                    if (sender) sender.replaceTrack(camTrack);
-                });
-            }
         }
         return;
     }
@@ -427,14 +514,15 @@ screenBtn.onclick = async () => {
 
         const screenTrack = screenStream.getVideoTracks()[0];
 
-        Object.values(peerConnections).forEach(pc => {
+        for (const [id, pc] of Object.entries(peerConnections)) {
             const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
             if (sender) {
-                sender.replaceTrack(screenTrack);
+                sender.replaceTrack(screenTrack).catch(() => {});
             } else {
                 pc.addTrack(screenTrack, screenStream);
+                // onnegotiationneeded сработает автоматически
             }
-        });
+        }
 
         showVideoInBox("local", screenStream, true, true);
 
