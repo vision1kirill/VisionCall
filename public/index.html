@@ -17,10 +17,8 @@
 <h1>VisionCall</h1>
 
 <input id="nickname" placeholder="Никнейм">
-<input id="room" placeholder="Комната">
 
 <div class="emoji-picker">
-
 <span class="emoji selected">😀</span>
 <span class="emoji">😎</span>
 <span class="emoji">🤖</span>
@@ -29,12 +27,26 @@
 <span class="emoji">🐼</span>
 <span class="emoji">🦊</span>
 <span class="emoji">🐸</span>
-
 </div>
 
 <input type="hidden" id="avatar" value="😀">
 
-<button class="join-btn" onclick="joinRoom()">Войти</button>
+<div class="home-actions">
+
+  <div class="action-section">
+    <p class="section-label">Создать новую комнату</p>
+    <button class="join-btn create-btn" onclick="createRoom()">🎉 Создать комнату</button>
+  </div>
+
+  <div class="home-divider">или</div>
+
+  <div class="action-section">
+    <p class="section-label">Войти в существующую</p>
+    <input id="roomInput" placeholder="Код или ссылка комнаты">
+    <button class="join-btn" onclick="joinRoom()">▶ Войти</button>
+  </div>
+
+</div>
 
 </div>
 
@@ -42,33 +54,69 @@
 
 const emojis = document.querySelectorAll(".emoji");
 
-emojis.forEach(e=>{
-
-e.onclick=()=>{
-
-emojis.forEach(x=>x.classList.remove("selected"));
-
-e.classList.add("selected");
-
-document.getElementById("avatar").value=e.innerText;
-
-};
-
+emojis.forEach(e => {
+    e.onclick = () => {
+        emojis.forEach(x => x.classList.remove("selected"));
+        e.classList.add("selected");
+        document.getElementById("avatar").value = e.innerText;
+    };
 });
 
-function joinRoom(){
-
-const name=document.getElementById("nickname").value;
-const room=document.getElementById("room").value;
-const avatar=document.getElementById("avatar").value;
-
-if(name===""||room===""){
-alert("Введите данные");
-return;
+function generateCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
 }
 
-window.location=`/room.html?room=${room}&name=${name}&avatar=${avatar}`;
+function getNickname() {
+    const name = document.getElementById("nickname").value.trim();
+    if (!name) {
+        alert("Введите никнейм");
+        return null;
+    }
+    return name;
+}
 
+function createRoom() {
+    const name = getNickname();
+    if (!name) return;
+    const avatar = document.getElementById("avatar").value;
+    const room = generateCode();
+    window.location = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar)}`;
+}
+
+function joinRoom() {
+    const name = getNickname();
+    if (!name) return;
+    const avatar = document.getElementById("avatar").value;
+
+    let input = document.getElementById("roomInput").value.trim();
+    if (!input) {
+        alert("Введите код или ссылку комнаты");
+        return;
+    }
+
+    // Если вставили полную ссылку — вытаскиваем код комнаты из неё
+    let room = input;
+    try {
+        const url = new URL(input);
+        const r = url.searchParams.get("room");
+        if (r) room = r;
+    } catch (e) {
+        // Не URL — используем как есть (это просто код)
+    }
+
+    window.location = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar)}`;
+}
+
+// Если пришли по ссылке с кодом комнаты — сразу подставляем код в поле
+const urlParams = new URLSearchParams(window.location.search);
+const preRoom = urlParams.get("room");
+if (preRoom) {
+    document.getElementById("roomInput").value = preRoom;
 }
 
 </script>
