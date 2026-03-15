@@ -258,6 +258,11 @@ video.screen-video {
     border-radius: 14px;
 }
 
+/* Убираем зеркало у фронтальной камеры (локальный превью) */
+video.flip-h {
+    transform: scaleX(-1);
+}
+
 /* ── AVATAR ── */
 
 .avatar {

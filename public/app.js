@@ -20,8 +20,9 @@ document.getElementById("roomTitle").innerText = "Комната: " + room;
 const videoGrid = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
 
-const micBtn   = document.getElementById("micBtn");
-const camBtn   = document.getElementById("camBtn");
+const micBtn    = document.getElementById("micBtn");
+const camBtn    = document.getElementById("camBtn");
+const flipBtn   = document.getElementById("flipBtn");
 const screenBtn = document.getElementById("screenBtn");
 const leaveBtn  = document.getElementById("leaveBtn");
 const chatBtn   = document.getElementById("chatBtn");
@@ -36,6 +37,7 @@ const makingOffer = {};   // предотвращает двойные offer'ы
 let micEnabled    = false;
 let camEnabled    = false;
 let screenEnabled = false;
+let facingMode    = "user"; // "user" = фронтальная, "environment" = основная
 
 // AudioContext для определения говорящего
 let audioCtx = null;
@@ -106,11 +108,17 @@ function showVideoInBox(id, stream, muted, isScreen) {
     box.querySelector(".avatar")?.remove();
 
     const video = document.createElement("video");
-    video.autoplay   = true;
-    video.muted      = muted;
-    video.srcObject  = stream;
+    video.autoplay    = true;
+    video.muted       = muted;
+    video.srcObject   = stream;
     video.playsInline = true;
-    if (isScreen) video.classList.add("screen-video");
+    if (isScreen) {
+        video.classList.add("screen-video");
+    } else if (id === "local" && facingMode === "user") {
+        // Фронтальная камера: зеркалим локальный превью (как в FaceTime/Zoom).
+        // На iOS Safari она уже зеркалится браузером, поэтому flip отменяет это.
+        video.classList.add("flip-h");
+    }
     box.insertBefore(video, document.getElementById("label-" + id));
 }
 
@@ -265,13 +273,56 @@ if (chatBtn && sidebar) {
 /* ════════════════════════════════════════════
    ДОСТУП К КАМЕРЕ / МИКРОФОНУ
 ════════════════════════════════════════════ */
-async function startCamera() {
+async function startCamera(facing) {
+    const mode = facing || facingMode;
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-        localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: mode },
+            audio: true
+        });
+    } catch (_) {
+        // Если конкретная камера недоступна — пробуем без ограничений
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        } catch (e) {
+            alert("Нет доступа к камере/микрофону: " + e.message);
+            return;
+        }
+    }
+    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+    localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+}
+
+/* ── Переключить между фронтальной и основной камерой ── */
+async function switchCamera() {
+    if (!camEnabled) return;
+
+    facingMode = (facingMode === "user") ? "environment" : "user";
+
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode },
+            audio: false
+        });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        newVideoTrack.enabled = true;
+
+        // Заменяем видео-трек в localStream
+        const oldTrack = localStream?.getVideoTracks()[0];
+        if (oldTrack) { oldTrack.stop(); localStream.removeTrack(oldTrack); }
+        localStream.addTrack(newVideoTrack);
+
+        // Заменяем трек во всех peer-соединениях
+        for (const [, pc] of Object.entries(peerConnections)) {
+            const sender = pc.getSenders().find(s => s.track?.kind === "video");
+            if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
+        }
+
+        showVideoInBox("local", localStream, true, false);
     } catch (e) {
-        alert("Нет доступа к камере/микрофону: " + e.message);
+        alert("Не удалось переключить камеру: " + e.message);
+        // Откатываем
+        facingMode = (facingMode === "user") ? "environment" : "user";
     }
 }
 
@@ -496,9 +547,18 @@ camBtn.onclick = async () => {
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
 
+    // Кнопка переключения камеры — только когда камера включена
+    if (flipBtn) flipBtn.style.display = camEnabled ? "" : "none";
+
     if (camEnabled) showVideoInBox("local", localStream, true, false);
     else            showAvatarInBox("local", avatar);
 };
+
+/* ── КНОПКА ПЕРЕКЛЮЧЕНИЯ КАМЕРЫ ── */
+if (flipBtn) {
+    flipBtn.style.display = "none"; // скрыта пока камера выключена
+    flipBtn.onclick = () => switchCamera();
+}
 
 /* ════════════════════════════════════════════
    ДЕМОНСТРАЦИЯ ЭКРАНА
