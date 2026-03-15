@@ -1,9 +1,19 @@
-const socket = io();
-
 const params = new URLSearchParams(window.location.search);
-const room = params.get("room");
-const name = params.get("name");
+const room   = params.get("room");
+const name   = params.get("name");
 const avatar = params.get("avatar") || "🙂";
+
+// Если зашли по голой ссылке без никнейма — отправляем на главную,
+// где код комнаты уже будет вставлен в поле "Войти в существующую"
+if (!name || name === "null") {
+    const redirect = room
+        ? `/?room=${encodeURIComponent(room)}`
+        : "/";
+    window.location.replace(redirect);
+    throw new Error("redirect"); // останавливаем выполнение скрипта
+}
+
+const socket = io();
 
 document.getElementById("roomTitle").innerText = "Комната: " + room;
 
