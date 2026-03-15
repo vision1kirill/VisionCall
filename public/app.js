@@ -10,51 +10,48 @@ document.getElementById("roomTitle").innerText = "Комната: " + room;
 const videoGrid = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
 
-const micBtn = document.getElementById("micBtn");
-const camBtn = document.getElementById("camBtn");
+const micBtn   = document.getElementById("micBtn");
+const camBtn   = document.getElementById("camBtn");
 const screenBtn = document.getElementById("screenBtn");
-const leaveBtn = document.getElementById("leaveBtn");
-const chatBtn = document.getElementById("chatBtn");
-const copyBtn = document.getElementById("copyBtn");
+const leaveBtn  = document.getElementById("leaveBtn");
+const chatBtn   = document.getElementById("chatBtn");
+const copyBtn   = document.getElementById("copyBtn");
 
-let localStream = null;
+let localStream  = null;
 let screenStream = null;
 const peerConnections = {};
-const peerMeta = {};
+const peerMeta    = {};
+const makingOffer = {};   // предотвращает двойные offer'ы
 
-// Флаги для обнаружения коллизий offer/answer (perfect negotiation)
-const makingOffer = {};
-
-let micEnabled = false;
-let camEnabled = false;
+let micEnabled    = false;
+let camEnabled    = false;
 let screenEnabled = false;
 
-// ICE: STUN + TURN серверы для работы через NAT/фаерволы
+// AudioContext для определения говорящего
+let audioCtx = null;
+function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+}
+
+/* ── ICE SERVERS ── */
 const servers = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
-        {
-            urls: "turn:openrelay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        },
-        {
-            urls: "turn:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        },
-        {
-            urls: "turns:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        }
+        { urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject", credential: "openrelayproject" },
+        { urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject", credential: "openrelayproject" },
+        { urls: "turns:openrelay.metered.ca:443",
+          username: "openrelayproject", credential: "openrelayproject" }
     ]
 };
 
-/* ── PARTICIPANTS LIST ── */
-
+/* ════════════════════════════════════════════
+   УЧАСТНИКИ
+════════════════════════════════════════════ */
 function addParticipant(id, username) {
     if (document.getElementById("participant-" + id)) return;
     const div = document.createElement("div");
@@ -63,24 +60,24 @@ function addParticipant(id, username) {
     div.innerText = username;
     participantsDiv.appendChild(div);
 }
-
 function removeParticipant(id) {
     const el = document.getElementById("participant-" + id);
     if (el) el.remove();
 }
 
-/* ── VIDEO BOX ── */
-
+/* ════════════════════════════════════════════
+   ВИДЕО-БЛОКИ
+════════════════════════════════════════════ */
 function createVideoBox(id, username, userAvatar) {
     if (document.getElementById("box-" + id)) return;
     const box = document.createElement("div");
     box.className = "video-box";
     box.id = "box-" + id;
 
-    const avatarDiv = document.createElement("div");
-    avatarDiv.className = "avatar";
-    avatarDiv.innerText = userAvatar;
-    box.appendChild(avatarDiv);
+    const av = document.createElement("div");
+    av.className = "avatar";
+    av.innerText = userAvatar;
+    box.appendChild(av);
 
     const label = document.createElement("div");
     label.className = "name-label";
@@ -89,85 +86,164 @@ function createVideoBox(id, username, userAvatar) {
     box.appendChild(label);
 
     videoGrid.appendChild(box);
+    updateGridLayout();
 }
 
 function showVideoInBox(id, stream, muted, isScreen) {
     const box = document.getElementById("box-" + id);
     if (!box) return;
-
-    const existingVideo = box.querySelector("video");
-    if (existingVideo) existingVideo.remove();
-
-    const existingAvatar = box.querySelector(".avatar");
-    if (existingAvatar) existingAvatar.remove();
+    box.querySelector("video")?.remove();
+    box.querySelector(".avatar")?.remove();
 
     const video = document.createElement("video");
-    video.autoplay = true;
-    video.muted = muted;
-    video.srcObject = stream;
+    video.autoplay   = true;
+    video.muted      = muted;
+    video.srcObject  = stream;
     video.playsInline = true;
     if (isScreen) video.classList.add("screen-video");
-
-    const label = document.getElementById("label-" + id);
-    box.insertBefore(video, label);
+    box.insertBefore(video, document.getElementById("label-" + id));
 }
 
 function showAvatarInBox(id, userAvatar) {
     const box = document.getElementById("box-" + id);
     if (!box) return;
-
-    const existingVideo = box.querySelector("video");
-    if (existingVideo) existingVideo.remove();
-
+    box.querySelector("video")?.remove();
     if (!box.querySelector(".avatar")) {
-        const avatarDiv = document.createElement("div");
-        avatarDiv.className = "avatar";
-        avatarDiv.innerText = userAvatar;
-        const label = document.getElementById("label-" + id);
-        box.insertBefore(avatarDiv, label);
+        const av = document.createElement("div");
+        av.className = "avatar";
+        av.innerText = userAvatar;
+        box.insertBefore(av, document.getElementById("label-" + id));
     }
 }
 
 function removeVideoBox(id) {
-    const box = document.getElementById("box-" + id);
-    if (box) box.remove();
+    document.getElementById("box-" + id)?.remove();
     removeParticipant(id);
-    if (peerConnections[id]) {
-        peerConnections[id].close();
-        delete peerConnections[id];
-    }
+    peerConnections[id]?.close();
+    delete peerConnections[id];
     delete makingOffer[id];
     delete peerMeta[id];
+    updateGridLayout();
 }
 
-/* ── LOCAL BOX ── */
+/* ── Динамический размер сетки ── */
+function updateGridLayout() {
+    const count = videoGrid.querySelectorAll(".video-box").length;
+    if (count <= 1) {
+        videoGrid.style.gridTemplateColumns = "1fr";
+        videoGrid.style.gridAutoRows = "minmax(200px, 1fr)";
+        videoGrid.style.alignContent = "stretch";
+    } else if (count <= 4) {
+        videoGrid.style.gridTemplateColumns = "repeat(2, 1fr)";
+        videoGrid.style.gridAutoRows = "minmax(180px, 1fr)";
+        videoGrid.style.alignContent = "stretch";
+    } else {
+        videoGrid.style.gridTemplateColumns = "repeat(auto-fill, minmax(240px, 1fr))";
+        videoGrid.style.gridAutoRows = "220px";
+        videoGrid.style.alignContent = "start";
+    }
+}
 
-createVideoBox("local", name, avatar);
-addParticipant("local", name);
+/* ════════════════════════════════════════════
+   ИНДИКАТОР ГОВОРЯЩЕГО
+════════════════════════════════════════════ */
+const speakingTimers = {};
 
-/* ── COPY LINK ── */
+function monitorSpeaking(id, stream) {
+    try {
+        const ctx      = getAudioCtx();
+        const source   = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.6;
+        source.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
 
+        function check() {
+            if (!document.getElementById("box-" + id)) return; // пир ушёл
+            analyser.getByteFrequencyData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            const avg = sum / data.length;
+            const box = document.getElementById("box-" + id);
+            if (!box) return;
+            if (avg > 12) {
+                box.classList.add("speaking");
+                clearTimeout(speakingTimers[id]);
+                speakingTimers[id] = setTimeout(() => box.classList.remove("speaking"), 600);
+            }
+            requestAnimationFrame(check);
+        }
+        requestAnimationFrame(check);
+    } catch (e) {
+        // AudioContext недоступен — пропускаем
+    }
+}
+
+/* ════════════════════════════════════════════
+   ФОКУС: КЛИК НА ВИДЕО → РАЗВОРАЧИВАЕТСЯ
+════════════════════════════════════════════ */
+const backdrop = document.createElement("div");
+backdrop.id = "videoBackdrop";
+document.body.appendChild(backdrop);
+
+function expandBox(box) {
+    document.querySelectorAll(".video-box.expanded").forEach(b => b.classList.remove("expanded"));
+    box.classList.add("expanded");
+    backdrop.classList.add("active");
+    // contain для любого видео в раскрытом боксе
+    const vid = box.querySelector("video");
+    if (vid) vid.style.objectFit = "contain";
+}
+
+function collapseAll() {
+    document.querySelectorAll(".video-box.expanded").forEach(box => {
+        box.classList.remove("expanded");
+        const vid = box.querySelector("video");
+        if (vid) vid.style.objectFit = "";
+    });
+    backdrop.classList.remove("active");
+}
+
+backdrop.addEventListener("click", collapseAll);
+document.addEventListener("keydown", e => { if (e.key === "Escape") collapseAll(); });
+
+videoGrid.addEventListener("click", e => {
+    const box = e.target.closest(".video-box");
+    if (!box) return;
+    if (box.classList.contains("expanded")) {
+        collapseAll();
+    } else {
+        expandBox(box);
+    }
+});
+
+/* ════════════════════════════════════════════
+   COPY LINK
+════════════════════════════════════════════ */
 if (copyBtn) {
-    copyBtn.onclick = () => {
-        const url = `${window.location.origin}/room.html?room=${encodeURIComponent(room)}`;
+    copyBtn.onclick = e => {
+        e.stopPropagation();
+        const url = `${location.origin}/room.html?room=${encodeURIComponent(room)}`;
         navigator.clipboard.writeText(url).then(() => {
             copyBtn.innerText = "✅";
             setTimeout(() => copyBtn.innerText = "🔗", 2000);
         }).catch(() => {
-            const input = document.createElement("input");
-            input.value = url;
-            document.body.appendChild(input);
-            input.select();
+            const inp = document.createElement("input");
+            inp.value = url;
+            document.body.appendChild(inp);
+            inp.select();
             document.execCommand("copy");
-            document.body.removeChild(input);
+            inp.remove();
             copyBtn.innerText = "✅";
             setTimeout(() => copyBtn.innerText = "🔗", 2000);
         });
     };
 }
 
-/* ── MOBILE CHAT TOGGLE ── */
-
+/* ════════════════════════════════════════════
+   МОБИЛЬНЫЙ ЧАТ
+════════════════════════════════════════════ */
 const sidebar = document.querySelector(".sidebar");
 if (chatBtn && sidebar) {
     chatBtn.onclick = () => {
@@ -176,63 +252,51 @@ if (chatBtn && sidebar) {
     };
 }
 
-/* ── CAMERA / MIC ACCESS ── */
-
+/* ════════════════════════════════════════════
+   ДОСТУП К КАМЕРЕ / МИКРОФОНУ
+════════════════════════════════════════════ */
 async function startCamera() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
         localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
     } catch (e) {
-        alert("Не удалось получить доступ к камере/микрофону: " + e.message);
+        alert("Нет доступа к камере/микрофону: " + e.message);
     }
 }
 
-/* ── ДОБАВИТЬ ТРЕК ВО ВСЕ СОЕДИНЕНИЯ ──
-   Заменяем если трек такого типа уже есть, иначе добавляем новый.
-   При добавлении нового трека onnegotiationneeded срабатывает автоматически. */
-
+/* ── Добавить/заменить трек во всех соединениях ── */
 function addTrackToPeers(track, stream) {
-    for (const [id, pc] of Object.entries(peerConnections)) {
-        const existingSender = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
-        if (existingSender) {
-            existingSender.replaceTrack(track).catch(e => console.error("replaceTrack:", e));
+    for (const [, pc] of Object.entries(peerConnections)) {
+        const existing = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
+        if (existing) {
+            existing.replaceTrack(track).catch(() => {});
         } else {
-            pc.addTrack(track, stream);
-            // onnegotiationneeded запустится автоматически
+            pc.addTrack(track, stream); // автоматически вызовет onnegotiationneeded
         }
     }
 }
 
-function removeTrackFromPeers(kind) {
-    for (const [id, pc] of Object.entries(peerConnections)) {
-        const sender = pc.getSenders().find(s => s.track && s.track.kind === kind);
-        if (sender) {
-            pc.removeTrack(sender);
-            // onnegotiationneeded запустится автоматически
-        }
-    }
-}
-
-/* ── PEER CONNECTION ── */
-
+/* ════════════════════════════════════════════
+   PEER CONNECTION (с perfect negotiation)
+════════════════════════════════════════════ */
 function createPeer(id) {
     if (peerConnections[id]) return peerConnections[id];
 
     const pc = new RTCPeerConnection(servers);
     makingOffer[id] = false;
 
-    // Автоматическая перестройка соединения при добавлении новых треков
+    // Автоматическая перестройка при добавлении треков ПОСЛЕ соединения
     pc.onnegotiationneeded = async () => {
+        if (makingOffer[id]) return; // уже создаём offer — пропускаем
         try {
             makingOffer[id] = true;
             const offer = await pc.createOffer();
-            // Убеждаемся что состояние не изменилось пока мы await-или
             if (pc.signalingState !== "stable") return;
             await pc.setLocalDescription(offer);
             socket.emit("offer", { offer: pc.localDescription, to: id });
         } catch (e) {
-            console.error("onnegotiationneeded error:", e);
+            console.error("onnegotiationneeded:", e);
         } finally {
             makingOffer[id] = false;
         }
@@ -240,50 +304,41 @@ function createPeer(id) {
 
     pc.ontrack = e => {
         const meta = peerMeta[id] || { name: "Участник", avatar: "🙂" };
-        if (!document.getElementById("box-" + id)) {
-            createVideoBox(id, meta.name, meta.avatar);
-        }
+        if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
         showVideoInBox(id, e.streams[0], false, false);
+        // Запускаем детектор речи для входящего аудио
+        monitorSpeaking(id, e.streams[0]);
     };
 
     pc.onicecandidate = e => {
-        if (e.candidate) {
-            socket.emit("ice-candidate", { candidate: e.candidate, to: id });
-        }
+        if (e.candidate) socket.emit("ice-candidate", { candidate: e.candidate, to: id });
     };
 
     pc.onconnectionstatechange = () => {
-        const state = pc.connectionState;
-        if (state === "failed") {
-            // Попытка перезапуска ICE при сбое
-            pc.restartIce();
-        }
-        if (state === "closed") {
-            removeVideoBox(id);
-        }
+        if (pc.connectionState === "failed") pc.restartIce();
+        if (pc.connectionState === "closed") removeVideoBox(id);
     };
 
     peerConnections[id] = pc;
     return pc;
 }
 
-/* ── SOCKET EVENTS ── */
-
+/* ════════════════════════════════════════════
+   SOCKET СОБЫТИЯ
+════════════════════════════════════════════ */
 socket.emit("join-room", { room, name, avatar });
 
-// Получили список тех, кто УЖЕ в комнате.
-// Мы — новый участник, они создадут offer'ы нам через user-connected на своей стороне.
-// Нам нужно только подготовить peer-соединения и показать их в UI.
+// Уже существующие в комнате — готовим peer'ы, OFFER придёт от них через user-connected
 socket.on("room-users", existingUsers => {
     for (const user of existingUsers) {
         peerMeta[user.id] = { name: user.name, avatar: user.avatar };
         addParticipant(user.id, user.name);
         createVideoBox(user.id, user.name, user.avatar);
-        createPeer(user.id); // готовим соединение, offer придёт от них
+        createPeer(user.id);
     }
 });
 
-// Кто-то новый зашёл в комнату — МЫ (уже существующий участник) создаём offer
+// Новый участник зашёл — МЫ создаём offer (мы старожилы)
 socket.on("user-connected", async data => {
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "🙂" };
     addParticipant(data.id, data.name);
@@ -291,32 +346,32 @@ socket.on("user-connected", async data => {
 
     const pc = createPeer(data.id);
 
-    // Добавляем текущие треки — это автоматически запустит onnegotiationneeded
+    // Добавляем ВСЕ текущие треки: и камеру/микрофон, и демонстрацию
     if (localStream) {
         localStream.getTracks().forEach(track => {
-            if (!pc.getSenders().find(s => s.track === track)) {
-                pc.addTrack(track, localStream);
-            }
+            if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
         });
     }
-
-    // Если треков нет — всё равно нужно создать соединение с offer
-    if (!localStream || pc.getSenders().length === 0) {
-        try {
-            makingOffer[data.id] = true;
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit("offer", { offer: pc.localDescription, to: data.id });
-        } catch (e) {
-            console.error("Initial offer error:", e);
-        } finally {
-            makingOffer[data.id] = false;
-        }
+    if (screenEnabled && screenStream) {
+        const st = screenStream.getVideoTracks()[0];
+        if (st && !pc.getSenders().find(s => s.track === st)) pc.addTrack(st, screenStream);
     }
-    // Если треки добавлены — onnegotiationneeded сам создаст offer
+
+    // ВСЕГДА явно создаём offer — не полагаемся только на onnegotiationneeded,
+    // чтобы новый участник гарантированно получил все треки
+    try {
+        makingOffer[data.id] = true;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("offer", { offer: pc.localDescription, to: data.id });
+    } catch (e) {
+        console.error("user-connected offer:", e);
+    } finally {
+        makingOffer[data.id] = false;
+    }
 });
 
-// Получили offer — обрабатываем с защитой от коллизий (perfect negotiation)
+// Получили offer — perfect negotiation с rollback при коллизии
 socket.on("offer", async data => {
     if (data.name) {
         peerMeta[data.from] = { name: data.name, avatar: data.avatar || "🙂" };
@@ -325,46 +380,32 @@ socket.on("offer", async data => {
             addParticipant(data.from, data.name);
         } else {
             const label = document.getElementById("label-" + data.from);
-            if (label) {
-                label.innerHTML = `${data.name} <span class="icon mic">🔇</span><span class="icon cam">🚫</span>`;
-            }
+            if (label) label.innerHTML = `${data.name} <span class="icon mic">🔇</span><span class="icon cam">🚫</span>`;
         }
     }
 
     const pc = createPeer(data.from);
 
-    // Обнаружение коллизии: мы тоже пытаемся создать offer к этому же пиру
     const collision = makingOffer[data.from] || pc.signalingState !== "stable";
-
     if (collision) {
-        // Полите-пир (с большим socket.id) уступает: откатывает свой offer
-        // Имполите-пир (с меньшим socket.id) игнорирует чужой offer
         const polite = socket.id > data.from;
-        if (!polite) {
-            console.log("Collision: ignoring offer from", data.from);
-            return;
-        }
-        // Мы — полите, откатываем наш offer
+        if (!polite) return; // мы важнее — игнорируем их offer
         try {
             await pc.setLocalDescription({ type: "rollback" });
         } catch (e) {
-            // Rollback не поддерживается в старых браузерах
-            console.warn("Rollback not supported, ignoring offer:", e);
+            console.warn("rollback failed:", e);
             return;
         }
     }
 
-    // Добавляем свои треки в это соединение
+    // Добавляем свои треки
     if (localStream) {
         localStream.getTracks().forEach(track => {
-            if (!pc.getSenders().find(s => s.track === track)) {
-                pc.addTrack(track, localStream);
-            }
+            if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
         });
     }
 
     await pc.setRemoteDescription(data.offer);
-
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     socket.emit("answer", { answer: pc.localDescription, to: data.from });
@@ -372,65 +413,42 @@ socket.on("offer", async data => {
 
 socket.on("answer", async data => {
     const pc = peerConnections[data.from];
-    if (!pc) return;
-    // Принимаем answer только если ждём его
-    if (pc.signalingState === "have-local-offer") {
-        try {
-            await pc.setRemoteDescription(data.answer);
-        } catch (e) {
-            console.error("setRemoteDescription answer error:", e);
-        }
+    if (pc && pc.signalingState === "have-local-offer") {
+        try { await pc.setRemoteDescription(data.answer); } catch (e) {}
     }
 });
 
 socket.on("ice-candidate", async data => {
     const pc = peerConnections[data.from];
-    if (!pc) return;
-    try {
-        await pc.addIceCandidate(data.candidate);
-    } catch (e) {
-        // Игнорируем если пир уже закрыт
-    }
+    if (pc) try { await pc.addIceCandidate(data.candidate); } catch (e) {}
 });
 
-socket.on("user-disconnected", data => {
-    removeVideoBox(data.id);
-});
+socket.on("user-disconnected", data => removeVideoBox(data.id));
 
-// Демонстрация экрана у другого участника: переключаем object-fit
 socket.on("screen-share-state", data => {
     const box = document.getElementById("box-" + data.from);
     if (!box) return;
-    const video = box.querySelector("video");
-    if (!video) return;
-    if (data.sharing) {
-        video.classList.add("screen-video");
-    } else {
-        video.classList.remove("screen-video");
-    }
+    const vid = box.querySelector("video");
+    if (vid) vid.classList.toggle("screen-video", data.sharing);
 });
 
-/* ── ICON HELPERS ── */
-
+/* ════════════════════════════════════════════
+   ИКОНКИ / СОСТОЯНИЕ МЕДИА
+════════════════════════════════════════════ */
 function updateLabelIcons(id, micOn, camOn) {
     const label = document.getElementById("label-" + id);
     if (!label) return;
-    const micIcon = label.querySelector(".mic");
-    const camIcon = label.querySelector(".cam");
-    if (micIcon) micIcon.innerText = micOn ? "🎤" : "🔇";
-    if (camIcon) camIcon.innerText = camOn ? "📷" : "🚫";
+    label.querySelector(".mic").innerText = micOn ? "🎤" : "🔇";
+    label.querySelector(".cam").innerText = camOn ? "📷" : "🚫";
 }
-
 function emitMediaState() {
     socket.emit("media-state", { mic: micEnabled, cam: camEnabled });
 }
+socket.on("media-state", data => updateLabelIcons(data.from, data.mic, data.cam));
 
-socket.on("media-state", data => {
-    updateLabelIcons(data.from, data.mic, data.cam);
-});
-
-/* ── MIC BUTTON ── */
-
+/* ════════════════════════════════════════════
+   КНОПКА МИКРОФОН
+════════════════════════════════════════════ */
 micBtn.onclick = async () => {
     if (!localStream) await startCamera();
     if (!localStream) return;
@@ -438,7 +456,6 @@ micBtn.onclick = async () => {
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => {
         t.enabled = micEnabled;
-        // Добавляем трек в соединения если ещё не добавлен
         addTrackToPeers(t, localStream);
     });
 
@@ -446,10 +463,14 @@ micBtn.onclick = async () => {
     micBtn.style.background = micEnabled ? "#22c55e" : "";
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
+
+    // Запускаем индикатор речи для себя когда включаем микрофон
+    if (micEnabled) monitorSpeaking("local", localStream);
 };
 
-/* ── CAM BUTTON ── */
-
+/* ════════════════════════════════════════════
+   КНОПКА КАМЕРА
+════════════════════════════════════════════ */
 camBtn.onclick = async () => {
     if (!localStream) await startCamera();
     if (!localStream) return;
@@ -465,83 +486,66 @@ camBtn.onclick = async () => {
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
 
-    if (camEnabled) {
-        showVideoInBox("local", localStream, true, false);
-    } else {
-        showAvatarInBox("local", avatar);
-    }
+    if (camEnabled) showVideoInBox("local", localStream, true, false);
+    else            showAvatarInBox("local", avatar);
 };
 
-/* ── SCREEN SHARE BUTTON ── */
-
+/* ════════════════════════════════════════════
+   ДЕМОНСТРАЦИЯ ЭКРАНА
+════════════════════════════════════════════ */
 screenBtn.onclick = async () => {
-
     if (screenEnabled) {
-        if (screenStream) {
-            screenStream.getTracks().forEach(t => t.stop());
-            screenStream = null;
-        }
-        screenEnabled = false;
+        screenStream?.getTracks().forEach(t => t.stop());
+        screenStream    = null;
+        screenEnabled   = false;
         screenBtn.style.background = "";
-
         socket.emit("screen-share-state", { sharing: false });
 
-        // Возвращаем камеру вместо экрана
         if (localStream) {
             const camTrack = localStream.getVideoTracks()[0];
             if (camTrack) {
-                for (const [id, pc] of Object.entries(peerConnections)) {
-                    const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-                    if (sender) sender.replaceTrack(camTrack).catch(() => {});
+                for (const [, pc] of Object.entries(peerConnections)) {
+                    const s = pc.getSenders().find(s => s.track?.kind === "video");
+                    if (s) s.replaceTrack(camTrack).catch(() => {});
                 }
             }
         }
-
-        if (camEnabled && localStream) {
-            showVideoInBox("local", localStream, true, false);
-        } else {
-            showAvatarInBox("local", avatar);
-        }
+        if (camEnabled && localStream) showVideoInBox("local", localStream, true, false);
+        else showAvatarInBox("local", avatar);
         return;
     }
 
     try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        screenStream  = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         screenEnabled = true;
         screenBtn.style.background = "#22c55e";
-
         socket.emit("screen-share-state", { sharing: true });
 
         const screenTrack = screenStream.getVideoTracks()[0];
-
-        for (const [id, pc] of Object.entries(peerConnections)) {
-            const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
-            if (sender) {
-                sender.replaceTrack(screenTrack).catch(() => {});
-            } else {
-                pc.addTrack(screenTrack, screenStream);
-                // onnegotiationneeded сработает автоматически
-            }
+        for (const [, pc] of Object.entries(peerConnections)) {
+            const s = pc.getSenders().find(s => s.track?.kind === "video");
+            if (s) s.replaceTrack(screenTrack).catch(() => {});
+            else   pc.addTrack(screenTrack, screenStream);
         }
-
         showVideoInBox("local", screenStream, true, true);
 
-        screenTrack.onended = () => {
-            if (screenEnabled) screenBtn.click();
-        };
-
+        screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
-        if (e.name !== "NotAllowedError") {
-            alert("Не удалось начать демонстрацию экрана: " + e.message);
-        }
+        if (e.name !== "NotAllowedError") alert("Не удалось начать демонстрацию: " + e.message);
     }
 };
 
-/* ── LEAVE BUTTON ── */
-
+/* ════════════════════════════════════════════
+   ВЫХОД
+════════════════════════════════════════════ */
 leaveBtn.onclick = () => {
     Object.values(peerConnections).forEach(pc => pc.close());
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
-    if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+    localStream?.getTracks().forEach(t => t.stop());
+    screenStream?.getTracks().forEach(t => t.stop());
     window.location = "/";
 };
+
+/* ── Начальный рендер ── */
+createVideoBox("local", name, avatar);
+addParticipant("local", name);
+updateGridLayout();
