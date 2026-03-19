@@ -192,11 +192,15 @@ camBtn.onclick = async () => {
 
 /* ── Войти в комнату ── */
 joinBtn.onclick = () => {
+    /* Защита от двойного нажатия */
+    if (joinBtn.disabled) return;
+    joinBtn.disabled = true;
+
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     /* Закрываем AudioContext — прослушка остановлена, в комнате её нет */
     if (audioCtx) { audioCtx.close(); audioCtx = null; }
     const gain = micGainSlider.value;
-    window.location = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar)}&mic=${micEnabled ? 1 : 0}&cam=${camEnabled ? 1 : 0}&micGain=${gain}`;
+    window.location.href = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name.slice(0, 64))}&avatar=${encodeURIComponent(avatar)}&mic=${micEnabled ? 1 : 0}&cam=${camEnabled ? 1 : 0}&micGain=${gain}`;
 };
 
 /* ── Инициализация ── */

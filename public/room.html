@@ -17,8 +17,8 @@
 
   <div class="room-info">
     <span id="roomTitle"></span>
-    <button id="copyBtn" title="Скопировать ссылку на комнату">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+    <button id="copyBtn" aria-label="Скопировать ссылку" title="Скопировать ссылку на комнату">
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
     </button>
   </div>
 
@@ -42,9 +42,10 @@
       <div class="chat-header">Чат</div>
       <div id="messages"></div>
       <div class="chat-input">
-        <input id="msgInput" placeholder="Сообщение…" autocomplete="off">
-        <button id="sendBtn">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <label for="msgInput" class="sr-only">Введите сообщение</label>
+        <input id="msgInput" placeholder="Сообщение…" autocomplete="off" maxlength="2000">
+        <button id="sendBtn" aria-label="Отправить сообщение">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
     </div>
@@ -56,28 +57,28 @@
 <!-- ── ПАНЕЛЬ УПРАВЛЕНИЯ ── -->
 <div class="controls">
 
-  <button id="micBtn" title="Микрофон">
-    <!-- задаётся через app.js -->
+  <button id="micBtn" aria-label="Включить микрофон" aria-pressed="false" title="Микрофон">
+    <!-- иконка задаётся через app.js -->
   </button>
 
-  <button id="camBtn" title="Камера">
-    <!-- задаётся через app.js -->
+  <button id="camBtn" aria-label="Включить камеру" aria-pressed="false" title="Камера">
+    <!-- иконка задаётся через app.js -->
   </button>
 
-  <button id="flipBtn" title="Переключить камеру" style="display:none">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+  <button id="flipBtn" aria-label="Переключить камеру" title="Переключить камеру" style="display:none">
+    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
   </button>
 
-  <button id="screenBtn" title="Демонстрация экрана">
-    <!-- задаётся через app.js -->
+  <button id="screenBtn" aria-label="Начать демонстрацию экрана" aria-pressed="false" title="Демонстрация экрана">
+    <!-- иконка задаётся через app.js -->
   </button>
 
-  <button id="chatBtn" title="Чат">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <button id="chatBtn" aria-label="Открыть чат" aria-pressed="false" title="Чат">
+    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
   </button>
 
-  <button id="leaveBtn" title="Выйти из комнаты">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  <button id="leaveBtn" aria-label="Покинуть звонок" title="Выйти из комнаты">
+    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
   </button>
 
 </div>

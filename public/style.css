@@ -1039,3 +1039,80 @@ video.flip-h { transform: scaleX(-1); }
     .join-card { padding: 28px 20px; }
     .lobby-card { padding: 24px 18px; }
 }
+
+/* ═══════════════════════════════════════
+   ДОСТУПНОСТЬ — скрытый текст для ридеров
+═══════════════════════════════════════ */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ═══════════════════════════════════════
+   TOAST УВЕДОМЛЕНИЯ — вместо alert()
+═══════════════════════════════════════ */
+.vc-toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: rgba(10, 10, 30, 0.96);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: var(--text);
+    padding: 13px 22px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 99999;
+    max-width: min(90vw, 420px);
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    line-height: 1.4;
+}
+.vc-toast.vc-toast-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.vc-toast.vc-toast-error  { border-color: rgba(239, 68, 68, 0.5); }
+.vc-toast.vc-toast-success { border-color: rgba(34, 197, 94, 0.5); }
+.vc-toast.vc-toast-info   { border-color: rgba(99, 102, 241, 0.45); }
+
+/* Toast на лобби-странице — ниже из-за отсутствия controls-bar */
+body.lobby-page .vc-toast,
+body.home .vc-toast {
+    bottom: 32px;
+}
+
+/* ═══════════════════════════════════════
+   СОСТОЯНИЕ DISABLED У КНОПОК
+═══════════════════════════════════════ */
+.lobby-join-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.join-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Focus-visible для клавиатурной навигации */
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}

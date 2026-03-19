@@ -13,26 +13,45 @@ if (!name || name === "null") {
 }
 
 /* ════════════════════════════════════════════
-   SVG ИКОНКИ
+   TOAST — заменяет все alert()
+════════════════════════════════════════════ */
+function showToast(msg, type = "error") {
+    /* Убираем предыдущий тост того же типа */
+    document.querySelectorAll(".vc-toast").forEach(t => t.remove());
+    const t = document.createElement("div");
+    t.className = "vc-toast vc-toast-" + type;
+    t.setAttribute("role", "alert");
+    t.setAttribute("aria-live", "assertive");
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add("vc-toast-show"));
+    setTimeout(() => {
+        t.classList.remove("vc-toast-show");
+        setTimeout(() => t.remove(), 300);
+    }, 5000);
+}
+
+/* ════════════════════════════════════════════
+   SVG ИКОНКИ (aria-hidden на всех)
 ════════════════════════════════════════════ */
 const ICONS = {
-    micOn:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>`,
-    micOff: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
-    camOn:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
-    camOff: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06A4 4 0 1 1 7.72 7.72"/></svg>`,
-    screenOn:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="8 10 12 6 16 10"/></svg>`,
-    screenOff: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-    copyLink: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
-    copied:    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-    labelMicOn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
-    labelMicOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
-    labelCamOn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
-    labelCamOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>`,
+    micOn:  `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>`,
+    micOff: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
+    camOn:  `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
+    camOff: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06A4 4 0 1 1 7.72 7.72"/></svg>`,
+    screenOn:  `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="8 10 12 6 16 10"/></svg>`,
+    screenOff: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+    copyLink: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    copied:    `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    labelMicOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
+    labelMicOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
+    labelCamOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
+    labelCamOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>`,
 };
 
 const socket = io();
 
-document.getElementById("roomTitle").innerText = room;
+document.getElementById("roomTitle").textContent = room;
 
 const videoGrid       = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
@@ -56,7 +75,7 @@ let micEnabled    = initMic;
 let camEnabled    = initCam;
 let screenEnabled = false;
 let facingMode    = "user";
-let cameraStarting = false; /* guard против двойного getUserMedia */
+let cameraStarting = false;
 
 /* ── ICE-кандидаты, пришедшие до remoteDescription ── */
 const pendingCandidates = {};
@@ -66,6 +85,9 @@ const peerAudioEls = {};
 
 /* ── Отмена speakingMonitor ── */
 const speakingCancels = {};
+
+/* ── Таймеры speaking-гало (отдельный Map — не засоряем DOM) ── */
+const speakTimers = {};
 
 /* ── AudioContext ── */
 let audioCtx    = null;
@@ -78,8 +100,7 @@ function getAudioCtx() {
     return audioCtx;
 }
 
-/* Применяем усиление микрофона из лобби.
-   Создаёт обработанный поток через GainNode → MediaStreamAudioDestinationNode. */
+/* Применяем усиление микрофона из лобби. */
 function buildGainedStream(rawStream, gain) {
     try {
         const ctx  = getAudioCtx();
@@ -123,7 +144,7 @@ function addParticipant(id, username) {
     const div = document.createElement("div");
     div.className = "participant";
     div.id = "participant-" + id;
-    div.innerText = username;
+    div.textContent = username;
     participantsDiv.appendChild(div);
 }
 function removeParticipant(id) {
@@ -142,7 +163,12 @@ function makeLabelHTML(username, micOn, camOn) {
 }
 
 function escapeHtml(s) {
-    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }
 
 function createVideoBox(id, username, userAvatar) {
@@ -153,7 +179,7 @@ function createVideoBox(id, username, userAvatar) {
 
     const av = document.createElement("div");
     av.className = "avatar";
-    av.innerText = userAvatar;
+    av.textContent = userAvatar;
     box.appendChild(av);
 
     const label = document.createElement("div");
@@ -169,7 +195,14 @@ function createVideoBox(id, username, userAvatar) {
 function showVideoInBox(id, stream, muted, isScreen) {
     const box = document.getElementById("box-" + id);
     if (!box) return;
-    box.querySelector("video")?.remove();
+
+    /* Явно останавливаем старый видеоэлемент перед удалением */
+    const oldVideo = box.querySelector("video");
+    if (oldVideo) {
+        oldVideo.pause();
+        oldVideo.srcObject = null;
+        oldVideo.remove();
+    }
     box.querySelector(".avatar")?.remove();
 
     const video = document.createElement("video");
@@ -188,11 +221,16 @@ function showVideoInBox(id, stream, muted, isScreen) {
 function showAvatarInBox(id, userAvatar) {
     const box = document.getElementById("box-" + id);
     if (!box) return;
-    box.querySelector("video")?.remove();
+    const oldVideo = box.querySelector("video");
+    if (oldVideo) {
+        oldVideo.pause();
+        oldVideo.srcObject = null;
+        oldVideo.remove();
+    }
     if (!box.querySelector(".avatar")) {
         const av = document.createElement("div");
         av.className = "avatar";
-        av.innerText = userAvatar;
+        av.textContent = userAvatar;
         box.insertBefore(av, document.getElementById("label-" + id));
     }
 }
@@ -213,6 +251,8 @@ function ensureRemoteAudio(id, stream) {
 function removeVideoBox(id) {
     /* Останавливаем speaking monitor */
     if (speakingCancels[id]) { speakingCancels[id](); delete speakingCancels[id]; }
+    /* Убираем speaking-таймер */
+    if (speakTimers[id]) { clearTimeout(speakTimers[id]); delete speakTimers[id]; }
     /* Убираем audio-only элемент */
     if (peerAudioEls[id]) {
         peerAudioEls[id].srcObject = null;
@@ -221,8 +261,13 @@ function removeVideoBox(id) {
     }
     /* Убираем screen audio */
     removeRemoteScreenAudio(id);
-    /* Убираем видео-блок */
-    document.getElementById("box-" + id)?.remove();
+    /* Явно останавливаем видео в боксе */
+    const box = document.getElementById("box-" + id);
+    if (box) {
+        const vid = box.querySelector("video");
+        if (vid) { vid.pause(); vid.srcObject = null; }
+    }
+    box?.remove();
     removeParticipant(id);
     peerConnections[id]?.close();
     delete peerConnections[id];
@@ -252,10 +297,9 @@ function updateGridLayout() {
 
 /* ════════════════════════════════════════════
    ИНДИКАТОР ГОВОРЯЩЕГО
-   С автоматической очисткой — не создаём дублей
+   speakTimers — отдельный Map, не засоряем DOM-элементы
 ════════════════════════════════════════════ */
 function monitorSpeaking(id, stream) {
-    /* Отменяем предыдущий монитор для этого id */
     if (speakingCancels[id]) { speakingCancels[id](); }
 
     try {
@@ -277,20 +321,19 @@ function monitorSpeaking(id, stream) {
 
         function check() {
             if (cancelled) return;
-            if (!document.getElementById("box-" + id)) {
-                speakingCancels[id]?.();
-                return;
-            }
+            const box = document.getElementById("box-" + id);
+            if (!box) { speakingCancels[id]?.(); return; }
             analyser.getByteFrequencyData(data);
             let sum = 0;
             for (let i = 0; i < data.length; i++) sum += data[i];
-            const box = document.getElementById("box-" + id);
-            if (box) {
-                if (sum / data.length > 12) {
-                    box.classList.add("speaking");
-                    clearTimeout(box._speakTimer);
-                    box._speakTimer = setTimeout(() => box.classList.remove("speaking"), 600);
-                }
+            if (sum / data.length > 12) {
+                box.classList.add("speaking");
+                /* Используем отдельный Map, не DOM-свойство */
+                if (speakTimers[id]) clearTimeout(speakTimers[id]);
+                speakTimers[id] = setTimeout(() => {
+                    box.classList.remove("speaking");
+                    delete speakTimers[id];
+                }, 600);
             }
             rafId = requestAnimationFrame(check);
         }
@@ -323,6 +366,8 @@ function collapseAll() {
 backdrop.addEventListener("click", collapseAll);
 document.addEventListener("keydown", e => { if (e.key === "Escape") collapseAll(); });
 videoGrid.addEventListener("click", e => {
+    /* Не разворачиваем если клик пришёл из панели звука экрана */
+    if (e.target.closest(".screen-audio-panel")) return;
     const box = e.target.closest(".video-box");
     if (!box) return;
     box.classList.contains("expanded") ? collapseAll() : expandBox(box);
@@ -335,16 +380,24 @@ if (copyBtn) {
     copyBtn.onclick = e => {
         e.stopPropagation();
         const url = `${location.origin}/room.html?room=${encodeURIComponent(room)}`;
-        const restore = () => setTimeout(() => { copyBtn.innerHTML = ICONS.copyLink; }, 2000);
+        const restore = () => setTimeout(() => {
+            copyBtn.innerHTML = ICONS.copyLink;
+            copyBtn.setAttribute("aria-label", "Скопировать ссылку");
+        }, 2000);
         navigator.clipboard.writeText(url).then(() => {
             copyBtn.innerHTML = ICONS.copied;
+            copyBtn.setAttribute("aria-label", "Ссылка скопирована");
             restore();
         }).catch(() => {
-            const inp = document.createElement("input");
-            inp.value = url; document.body.appendChild(inp); inp.select();
-            document.execCommand("copy"); inp.remove();
-            copyBtn.innerHTML = ICONS.copied;
-            restore();
+            try {
+                const inp = document.createElement("input");
+                inp.value = url; document.body.appendChild(inp); inp.select();
+                document.execCommand("copy"); inp.remove();
+                copyBtn.innerHTML = ICONS.copied;
+                restore();
+            } catch (_) {
+                showToast("Не удалось скопировать ссылку", "error");
+            }
         });
     };
 }
@@ -356,7 +409,10 @@ const sidebar = document.querySelector(".sidebar");
 if (chatBtn && sidebar) {
     chatBtn.onclick = () => {
         sidebar.classList.toggle("mobile-open");
-        chatBtn.classList.toggle("btn-active", sidebar.classList.contains("mobile-open"));
+        const isOpen = sidebar.classList.contains("mobile-open");
+        chatBtn.classList.toggle("btn-active", isOpen);
+        chatBtn.setAttribute("aria-pressed", isOpen ? "true" : "false");
+        chatBtn.setAttribute("aria-label", isOpen ? "Закрыть чат" : "Открыть чат");
     };
 }
 
@@ -364,7 +420,7 @@ if (chatBtn && sidebar) {
    ДОСТУП К КАМЕРЕ / МИКРОФОНУ
 ════════════════════════════════════════════ */
 async function startCamera(facing) {
-    if (cameraStarting) return; /* Защита от двойного вызова */
+    if (cameraStarting) return;
     cameraStarting = true;
     const mode = facing || facingMode;
     let rawStream;
@@ -376,7 +432,7 @@ async function startCamera(facing) {
         try {
             rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         } catch (e) {
-            alert("Нет доступа к камере/микрофону: " + e.message);
+            showToast("Нет доступа к камере/микрофону: " + e.message, "error");
             cameraStarting = false;
             return;
         }
@@ -389,7 +445,6 @@ async function startCamera(facing) {
 
 /* ── Переключение фронтальной / задней камеры ── */
 async function switchCamera() {
-    /* Не переключать во время демонстрации экрана */
     if (!camEnabled || screenEnabled) return;
     facingMode = (facingMode === "user") ? "environment" : "user";
     try {
@@ -407,7 +462,7 @@ async function switchCamera() {
         }
         showVideoInBox("local", localStream, true, false);
     } catch (e) {
-        alert("Не удалось переключить камеру: " + e.message);
+        showToast("Не удалось переключить камеру: " + e.message, "error");
         facingMode = (facingMode === "user") ? "environment" : "user";
     }
 }
@@ -441,11 +496,12 @@ function showRemoteScreenAudio(id, stream) {
         const panel = document.createElement("div");
         panel.className = "screen-audio-panel remote-screen-audio-panel";
         panel.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
             <span class="screen-audio-label">Звук экрана</span>
-            <input type="range" class="rsa-slider" min="0" max="200" value="100" step="5">
+            <label class="sr-only" for="rsa-${id}">Громкость звука экрана</label>
+            <input id="rsa-${id}" type="range" class="rsa-slider" min="0" max="100" value="100" step="5">
             <span class="screen-audio-value">100%</span>`;
         box.appendChild(panel);
         const slider = panel.querySelector(".rsa-slider");
@@ -453,8 +509,7 @@ function showRemoteScreenAudio(id, stream) {
         slider.oninput = function () {
             const pct = parseInt(this.value);
             valEl.textContent = pct + "%";
-            /* Позволяем усилить до 200% — нет ограничения в 100% */
-            audio.volume = Math.min(1, pct / 100); /* HTMLAudioElement.volume макс 1.0 */
+            audio.volume = pct / 100;
         };
         remoteScreenAudioEls[id] = { audio, panel };
     } else {
@@ -465,7 +520,7 @@ function showRemoteScreenAudio(id, stream) {
 function removeRemoteScreenAudio(id) {
     const e = remoteScreenAudioEls[id];
     if (!e) return;
-    e.audio?.remove();
+    if (e.audio) { e.audio.srcObject = null; e.audio.remove(); }
     e.panel?.remove();
     delete remoteScreenAudioEls[id];
 }
@@ -498,18 +553,15 @@ function createPeer(id) {
         if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
 
         if (e.track.kind === "video") {
-            /* Видео-трек → показываем в блоке (поток содержит и аудио) */
             showVideoInBox(id, e.streams[0], false, false);
             monitorSpeaking(id, e.streams[0]);
         } else if (e.track.kind === "audio") {
             const box          = document.getElementById("box-" + id);
             const existingVideo = box?.querySelector("video");
             if (!existingVideo) {
-                /* Участник без камеры — создаём скрытый <audio> */
                 ensureRemoteAudio(id, e.streams[0]);
                 monitorSpeaking(id, e.streams[0]);
             } else if (existingVideo.srcObject !== e.streams[0]) {
-                /* Звук демонстрации экрана (другой поток) */
                 showRemoteScreenAudio(id, e.streams[0]);
             }
         }
@@ -544,6 +596,23 @@ async function flushCandidates(id) {
 ════════════════════════════════════════════ */
 socket.emit("join-room", { room, name, avatar });
 
+/* Комната заполнена */
+socket.on("room-full", () => {
+    showToast("Комната заполнена — максимум 8 участников", "error");
+    setTimeout(() => window.location.replace("/"), 3000);
+});
+
+/* Ошибка комнаты */
+socket.on("room-error", msg => {
+    showToast(msg || "Ошибка подключения к комнате", "error");
+    setTimeout(() => window.location.replace("/"), 3000);
+});
+
+/* Сервер перезапускается */
+socket.on("server-shutdown", () => {
+    showToast("Сервер перезапускается…", "info");
+});
+
 socket.on("room-users", existingUsers => {
     for (const user of existingUsers) {
         peerMeta[user.id] = { name: user.name, avatar: user.avatar };
@@ -568,7 +637,6 @@ socket.on("user-connected", async data => {
     if (screenEnabled && screenStream) {
         const st = screenStream.getVideoTracks()[0];
         if (st && !pc.getSenders().find(s => s.track === st)) pc.addTrack(st, screenStream);
-        /* Также добавляем аудио демонстрации */
         screenStream.getAudioTracks().forEach(at => {
             if (!pc.getSenders().find(s => s.track === at)) pc.addTrack(at, screenStream);
         });
@@ -585,7 +653,6 @@ socket.on("user-connected", async data => {
         makingOffer[data.id] = false;
     }
 
-    /* Отправляем наше текущее состояние микрофона/камеры новому участнику */
     emitMediaState();
 });
 
@@ -659,7 +726,7 @@ socket.on("screen-share-state", data => {
 });
 
 /* ════════════════════════════════════════════
-   ИКОНКИ / СОСТОЯНИЕ МЕДИА
+   ИКОНКИ / СОСТОЯНИЕ МЕДИА + ARIA
 ════════════════════════════════════════════ */
 function updateLabelIcons(id, micOn, camOn) {
     const label = document.getElementById("label-" + id);
@@ -678,7 +745,8 @@ socket.on("media-state", data => updateLabelIcons(data.from, data.mic, data.cam)
 function setMicIcon() {
     micBtn.innerHTML = micEnabled ? ICONS.micOn : ICONS.micOff;
     micBtn.className = micEnabled ? "btn-active" : "btn-inactive";
-    micBtn.title     = micEnabled ? "Выключить микрофон" : "Включить микрофон";
+    micBtn.setAttribute("aria-label", micEnabled ? "Выключить микрофон" : "Включить микрофон");
+    micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
 }
 micBtn.onclick = async () => {
     if (!localStream) { await startCamera(); if (!localStream) return; }
@@ -699,7 +767,8 @@ micBtn.onclick = async () => {
 function setCamIcon() {
     camBtn.innerHTML = camEnabled ? ICONS.camOn : ICONS.camOff;
     camBtn.className = camEnabled ? "btn-active" : "btn-inactive";
-    camBtn.title     = camEnabled ? "Выключить камеру" : "Включить камеру";
+    camBtn.setAttribute("aria-label", camEnabled ? "Выключить камеру" : "Включить камеру");
+    camBtn.setAttribute("aria-pressed", camEnabled ? "true" : "false");
 }
 camBtn.onclick = async () => {
     if (!localStream) { await startCamera(); if (!localStream) return; }
@@ -724,7 +793,8 @@ if (flipBtn) { flipBtn.onclick = () => switchCamera(); }
 function setScreenIcon() {
     screenBtn.innerHTML = screenEnabled ? ICONS.screenOn : ICONS.screenOff;
     screenBtn.className = screenEnabled ? "btn-screen-active" : "";
-    screenBtn.title     = screenEnabled ? "Остановить демонстрацию" : "Демонстрация экрана";
+    screenBtn.setAttribute("aria-label", screenEnabled ? "Остановить демонстрацию экрана" : "Начать демонстрацию экрана");
+    screenBtn.setAttribute("aria-pressed", screenEnabled ? "true" : "false");
 }
 
 let screenAudioEl = null;
@@ -736,17 +806,18 @@ function showScreenAudioPanel(stream) {
         panel.id = "screenAudioPanel";
         panel.className = "screen-audio-panel";
         panel.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
             <span class="screen-audio-label">Звук экрана</span>
-            <input type="range" id="screenAudioSlider" min="0" max="200" value="100" step="5">
+            <label class="sr-only" for="screenAudioSlider">Громкость вашего звука экрана</label>
+            <input id="screenAudioSlider" type="range" min="0" max="100" value="100" step="5">
             <span class="screen-audio-value" id="screenAudioValue">100%</span>`;
         document.querySelector(".controls").prepend(panel);
         document.getElementById("screenAudioSlider").oninput = function () {
             const pct = parseInt(this.value);
             document.getElementById("screenAudioValue").textContent = pct + "%";
-            if (screenAudioEl) screenAudioEl.volume = Math.min(1, pct / 100);
+            if (screenAudioEl) screenAudioEl.volume = pct / 100;
         };
     }
     panel.style.display = "flex";
@@ -761,14 +832,16 @@ function showScreenAudioPanel(stream) {
 function hideScreenAudioPanel() {
     const panel = document.getElementById("screenAudioPanel");
     if (panel) panel.style.display = "none";
-    if (screenAudioEl) { screenAudioEl.srcObject = null; screenAudioEl.remove(); screenAudioEl = null; }
+    if (screenAudioEl) {
+        screenAudioEl.srcObject = null;
+        screenAudioEl.remove();
+        screenAudioEl = null;
+    }
 }
 
 screenBtn.onclick = async () => {
     if (screenEnabled) {
-        /* Сохраняем список аудио-треков ДО остановки потока */
         const audioTracksToRemove = screenStream?.getAudioTracks() ?? [];
-
         screenStream?.getTracks().forEach(t => t.stop());
         screenStream  = null;
         screenEnabled = false;
@@ -776,7 +849,6 @@ screenBtn.onclick = async () => {
         socket.emit("screen-share-state", { sharing: false });
         hideScreenAudioPanel();
 
-        /* Удаляем screen-audio senders из всех peer-соединений */
         for (const [, pc] of Object.entries(peerConnections)) {
             audioTracksToRemove.forEach(at => {
                 const sender = pc.getSenders().find(s => s.track === at);
@@ -804,7 +876,7 @@ screenBtn.onclick = async () => {
         setScreenIcon();
         socket.emit("screen-share-state", { sharing: true });
 
-        const screenTrack      = screenStream.getVideoTracks()[0];
+        const screenTrack       = screenStream.getVideoTracks()[0];
         const screenAudioTracks = screenStream.getAudioTracks();
 
         for (const [, pc] of Object.entries(peerConnections)) {
@@ -819,21 +891,24 @@ screenBtn.onclick = async () => {
         if (screenAudioTracks.length > 0) showScreenAudioPanel(screenStream);
         screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
-        if (e.name !== "NotAllowedError") alert("Не удалось начать демонстрацию: " + e.message);
+        if (e.name !== "NotAllowedError") showToast("Не удалось начать демонстрацию: " + e.message, "error");
     }
 };
 
 /* ════════════════════════════════════════════
-   ВЫХОД
+   ВЫХОД — с подтверждением
 ════════════════════════════════════════════ */
 leaveBtn.onclick = () => {
+    if (!confirm("Покинуть звонок?")) return;
     /* Останавливаем все speaking-мониторы */
     Object.keys(speakingCancels).forEach(id => { speakingCancels[id]?.(); });
+    /* Чистим speakTimers */
+    Object.keys(speakTimers).forEach(id => { clearTimeout(speakTimers[id]); });
     Object.values(peerConnections).forEach(pc => pc.close());
     localStream?.getTracks().forEach(t => t.stop());
     screenStream?.getTracks().forEach(t => t.stop());
     socket.disconnect();
-    window.location = "/";
+    window.location.href = "/";
 };
 
 /* ════════════════════════════════════════════
@@ -845,7 +920,10 @@ updateGridLayout();
 setMicIcon();
 setCamIcon();
 setScreenIcon();
-if (copyBtn) copyBtn.innerHTML = ICONS.copyLink;
+if (copyBtn) {
+    copyBtn.innerHTML = ICONS.copyLink;
+    copyBtn.setAttribute("aria-label", "Скопировать ссылку");
+}
 
 /* Если лобби включило камеру/микрофон — стартуем поток сразу */
 if (initMic || initCam) {
