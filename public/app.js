@@ -1,7 +1,7 @@
 const params   = new URLSearchParams(window.location.search);
 const room     = params.get("room");
 const name     = params.get("name");
-const avatar   = params.get("avatar") || "🙂";
+const avatar   = params.get("avatar") || "po";
 const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
 const initGain = Math.max(0, Math.min(2, parseInt(params.get("micGain") || "100") / 100));
@@ -41,7 +41,7 @@ const ICONS = {
     camOff: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06A4 4 0 1 1 7.72 7.72"/></svg>`,
     screenOn:  `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="8 10 12 6 16 10"/></svg>`,
     screenOff: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
-    copyLink: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    copyLink: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
     copied:    `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
     labelMicOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
     labelMicOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
@@ -179,7 +179,11 @@ function createVideoBox(id, username, userAvatar) {
 
     const av = document.createElement("div");
     av.className = "avatar";
-    av.textContent = userAvatar;
+    if (window.AVATARS && window.AVATARS[userAvatar]) {
+        av.innerHTML = window.AVATARS[userAvatar];
+    } else {
+        av.textContent = userAvatar;
+    }
     box.appendChild(av);
 
     const label = document.createElement("div");
@@ -230,7 +234,11 @@ function showAvatarInBox(id, userAvatar) {
     if (!box.querySelector(".avatar")) {
         const av = document.createElement("div");
         av.className = "avatar";
-        av.textContent = userAvatar;
+        if (window.AVATARS && window.AVATARS[userAvatar]) {
+            av.innerHTML = window.AVATARS[userAvatar];
+        } else {
+            av.textContent = userAvatar;
+        }
         box.insertBefore(av, document.getElementById("label-" + id));
     }
 }
@@ -379,14 +387,16 @@ videoGrid.addEventListener("click", e => {
 if (copyBtn) {
     copyBtn.onclick = e => {
         e.stopPropagation();
-        const url = `${location.origin}/room.html?room=${encodeURIComponent(room)}`;
+        const url = `${location.origin}/?room=${encodeURIComponent(room)}`;
         const restore = () => setTimeout(() => {
             copyBtn.innerHTML = ICONS.copyLink;
-            copyBtn.setAttribute("aria-label", "Скопировать ссылку");
+            copyBtn.setAttribute("aria-label", "Поделиться ссылкой");
+            copyBtn.classList.remove("copy-success");
         }, 2000);
         navigator.clipboard.writeText(url).then(() => {
             copyBtn.innerHTML = ICONS.copied;
             copyBtn.setAttribute("aria-label", "Ссылка скопирована");
+            copyBtn.classList.add("copy-success");
             restore();
         }).catch(() => {
             try {
@@ -394,6 +404,7 @@ if (copyBtn) {
                 inp.value = url; document.body.appendChild(inp); inp.select();
                 document.execCommand("copy"); inp.remove();
                 copyBtn.innerHTML = ICONS.copied;
+                copyBtn.classList.add("copy-success");
                 restore();
             } catch (_) {
                 showToast("Не удалось скопировать ссылку", "error");
@@ -549,7 +560,7 @@ function createPeer(id) {
     };
 
     pc.ontrack = e => {
-        const meta = peerMeta[id] || { name: "Участник", avatar: "🙂" };
+        const meta = peerMeta[id] || { name: "Участник", avatar: "po" };
         if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
 
         if (e.track.kind === "video") {
@@ -623,9 +634,9 @@ socket.on("room-users", existingUsers => {
 });
 
 socket.on("user-connected", async data => {
-    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "🙂" };
+    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "po" };
     addParticipant(data.id, data.name);
-    createVideoBox(data.id, data.name, data.avatar || "🙂");
+    createVideoBox(data.id, data.name, data.avatar || "po");
 
     const pc = createPeer(data.id);
 
@@ -658,9 +669,9 @@ socket.on("user-connected", async data => {
 
 socket.on("offer", async data => {
     if (data.name) {
-        peerMeta[data.from] = { name: data.name, avatar: data.avatar || "🙂" };
+        peerMeta[data.from] = { name: data.name, avatar: data.avatar || "po" };
         if (!document.getElementById("box-" + data.from)) {
-            createVideoBox(data.from, data.name, data.avatar || "🙂");
+            createVideoBox(data.from, data.name, data.avatar || "po");
             addParticipant(data.from, data.name);
         } else {
             const label = document.getElementById("label-" + data.from);
@@ -797,7 +808,8 @@ function setScreenIcon() {
     screenBtn.setAttribute("aria-pressed", screenEnabled ? "true" : "false");
 }
 
-let screenAudioEl = null;
+let screenAudioEl  = null;
+let screenAudioMix = null; /* { micSrc, screenSrc, dest } for WebAudio mix */
 
 function showScreenAudioPanel(stream) {
     let panel = document.getElementById("screenAudioPanel");
@@ -841,7 +853,7 @@ function hideScreenAudioPanel() {
 
 screenBtn.onclick = async () => {
     if (screenEnabled) {
-        const audioTracksToRemove = screenStream?.getAudioTracks() ?? [];
+        /* ── Остановка демонстрации ── */
         screenStream?.getTracks().forEach(t => t.stop());
         screenStream  = null;
         screenEnabled = false;
@@ -849,13 +861,22 @@ screenBtn.onclick = async () => {
         socket.emit("screen-share-state", { sharing: false });
         hideScreenAudioPanel();
 
-        for (const [, pc] of Object.entries(peerConnections)) {
-            audioTracksToRemove.forEach(at => {
-                const sender = pc.getSenders().find(s => s.track === at);
-                if (sender) try { pc.removeTrack(sender); } catch (e) {}
-            });
+        /* Убираем WebAudio-микс: возвращаем исходный мик-трек */
+        if (screenAudioMix) {
+            try { screenAudioMix.micSrc?.disconnect(); } catch (e) {}
+            try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
+            screenAudioMix = null;
+            /* replaceTrack обратно на исходный микрофон — без рenegotiации */
+            const micTrack = localStream?.getAudioTracks()[0];
+            if (micTrack) {
+                for (const [, pc] of Object.entries(peerConnections)) {
+                    const s = pc.getSenders().find(s => s.track?.kind === "audio");
+                    if (s) s.replaceTrack(micTrack).catch(() => {});
+                }
+            }
         }
 
+        /* Возвращаем видео-трек камеры */
         if (localStream) {
             const camTrack = localStream.getVideoTracks()[0];
             if (camTrack) {
@@ -879,16 +900,61 @@ screenBtn.onclick = async () => {
         const screenTrack       = screenStream.getVideoTracks()[0];
         const screenAudioTracks = screenStream.getAudioTracks();
 
+        /* ── Видео: replaceTrack не вызывает renegotiation ── */
         for (const [, pc] of Object.entries(peerConnections)) {
             const sVideo = pc.getSenders().find(s => s.track?.kind === "video");
             if (sVideo) sVideo.replaceTrack(screenTrack).catch(() => {});
             else        pc.addTrack(screenTrack, screenStream);
-            screenAudioTracks.forEach(at => {
-                if (!pc.getSenders().find(s => s.track === at)) pc.addTrack(at, screenStream);
-            });
         }
+
+        /* ── Аудио экрана: WebAudio-микс вместо addTrack → нет renegotiation
+              Это исправляет баг на iOS: добавление второго аудио-трека
+              вызывало renegotiation, во время которой Safari терял аудио.
+              Теперь мик + аудио экрана смешиваются через AudioContext и
+              передаются через уже существующий аудио-сендер (replaceTrack).
+        ── */
+        if (screenAudioTracks.length > 0) {
+            try {
+                const ctx  = getAudioCtx();
+                const dest = ctx.createMediaStreamDestination();
+
+                /* Микрофон */
+                let micSrc = null;
+                if (localStream) {
+                    const micTracks = localStream.getAudioTracks();
+                    if (micTracks.length > 0) {
+                        const micStream = new MediaStream(micTracks);
+                        micSrc = ctx.createMediaStreamSource(micStream);
+                        micSrc.connect(dest);
+                    }
+                }
+
+                /* Аудио экрана */
+                const screenAudioStream = new MediaStream(screenAudioTracks);
+                const screenSrc = ctx.createMediaStreamSource(screenAudioStream);
+                screenSrc.connect(dest);
+
+                const mixedTrack = dest.stream.getAudioTracks()[0];
+                screenAudioMix = { micSrc, screenSrc, dest };
+
+                /* replaceTrack — никакой renegotiation */
+                for (const [, pc] of Object.entries(peerConnections)) {
+                    const sAudio = pc.getSenders().find(s => s.track?.kind === "audio");
+                    if (sAudio) {
+                        sAudio.replaceTrack(mixedTrack).catch(() => {});
+                    } else {
+                        pc.addTrack(mixedTrack, dest.stream);
+                    }
+                }
+            } catch (e) {
+                console.warn("Screen audio mix failed:", e);
+                /* Fallback: просто не передаём аудио экрана — зато не ломаем соединение */
+            }
+
+            showScreenAudioPanel(screenStream);
+        }
+
         showVideoInBox("local", screenStream, true, true);
-        if (screenAudioTracks.length > 0) showScreenAudioPanel(screenStream);
         screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
         if (e.name !== "NotAllowedError") showToast("Не удалось начать демонстрацию: " + e.message, "error");
@@ -904,6 +970,12 @@ leaveBtn.onclick = () => {
     Object.keys(speakingCancels).forEach(id => { speakingCancels[id]?.(); });
     /* Чистим speakTimers */
     Object.keys(speakTimers).forEach(id => { clearTimeout(speakTimers[id]); });
+    /* Чистим WebAudio-микс экрана */
+    if (screenAudioMix) {
+        try { screenAudioMix.micSrc?.disconnect(); } catch (e) {}
+        try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
+        screenAudioMix = null;
+    }
     Object.values(peerConnections).forEach(pc => pc.close());
     localStream?.getTracks().forEach(t => t.stop());
     screenStream?.getTracks().forEach(t => t.stop());
@@ -922,7 +994,7 @@ setCamIcon();
 setScreenIcon();
 if (copyBtn) {
     copyBtn.innerHTML = ICONS.copyLink;
-    copyBtn.setAttribute("aria-label", "Скопировать ссылку");
+    copyBtn.setAttribute("aria-label", "Поделиться ссылкой");
 }
 
 /* Если лобби включило камеру/микрофон — стартуем поток сразу */

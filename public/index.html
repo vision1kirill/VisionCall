@@ -14,22 +14,21 @@
 
   <div class="logo-text">VisionCall</div>
 
+  <!-- Онлайн-счётчик -->
+  <div class="online-counter-wrap">
+    <div class="online-dot"></div>
+    <div class="flip-counter" id="onlineFlipCounter">
+      <span class="flip-digit"><span class="digit-val">0</span></span>
+    </div>
+    <span class="online-label">онлайн</span>
+  </div>
+
   <input id="nickname" placeholder="Ваш никнейм" type="text" autocomplete="off" maxlength="64">
 
-  <div class="emoji-picker">
-    <span class="emoji selected">😀</span>
-    <span class="emoji">😎</span>
-    <span class="emoji">🤖</span>
-    <span class="emoji">👾</span>
-    <span class="emoji">🐱</span>
-    <span class="emoji">🐼</span>
-    <span class="emoji">🦊</span>
-    <span class="emoji">🐸</span>
-  </div>
-  <input type="hidden" id="avatar" value="😀">
+  <div class="avatar-picker" id="avatarPickerHome"></div>
+  <input type="hidden" id="avatar" value="po">
 
   <div class="home-actions">
-
     <div class="action-section">
       <p class="section-label">Создать новую комнату</p>
       <button class="join-btn create-btn" onclick="createRoom()">
@@ -37,18 +36,6 @@
         Создать комнату
       </button>
     </div>
-
-    <div class="home-divider">или</div>
-
-    <div class="action-section">
-      <p class="section-label">Войти в существующую</p>
-      <input id="roomInput" placeholder="Код комнаты или ссылка" type="text" autocomplete="off">
-      <button class="join-btn" onclick="joinRoom()">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-        Войти в комнату
-      </button>
-    </div>
-
   </div>
 </div>
 
@@ -65,17 +52,8 @@
 
   <input id="nicknameLink" placeholder="Ваш никнейм" type="text" autocomplete="off" maxlength="64">
 
-  <div class="emoji-picker" id="emojiPickerLink">
-    <span class="emoji selected">😀</span>
-    <span class="emoji">😎</span>
-    <span class="emoji">🤖</span>
-    <span class="emoji">👾</span>
-    <span class="emoji">🐱</span>
-    <span class="emoji">🐼</span>
-    <span class="emoji">🦊</span>
-    <span class="emoji">🐸</span>
-  </div>
-  <input type="hidden" id="avatarLink" value="😀">
+  <div class="avatar-picker" id="avatarPickerLink"></div>
+  <input type="hidden" id="avatarLink" value="po">
 
   <button class="join-btn" onclick="joinViaLink()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -84,20 +62,39 @@
 
 </div>
 
+<script src="avatars.js"></script>
 <script>
-/* ── Эмодзи-пикеры ── */
-function initPicker(pickerSelector, hiddenId) {
-    const emojis = document.querySelectorAll(pickerSelector + " .emoji");
-    emojis.forEach(e => {
-        e.onclick = () => {
-            emojis.forEach(x => x.classList.remove("selected"));
-            e.classList.add("selected");
-            document.getElementById(hiddenId).value = e.innerText;
+/* ── Инициализация аватарок ── */
+function initAvatarPicker(containerId, hiddenId) {
+    const container = document.getElementById(containerId);
+    if (!container || !window.AVATARS) return;
+    let first = true;
+    for (const [key, svg] of Object.entries(window.AVATARS)) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "avatar-option" + (first ? " selected" : "");
+        btn.setAttribute("data-key", key);
+        btn.setAttribute("title", window.AVATAR_LABELS?.[key] || key);
+        btn.innerHTML = svg;
+        btn.onclick = () => {
+            container.querySelectorAll(".avatar-option").forEach(b => b.classList.remove("selected"));
+            btn.classList.add("selected");
+            document.getElementById(hiddenId).value = key;
         };
-    });
+        container.appendChild(btn);
+        if (first) { document.getElementById(hiddenId).value = key; first = false; }
+    }
 }
-initPicker(".join-card#homeCard .emoji-picker", "avatar");
-initPicker(".join-card#linkCard .emoji-picker", "avatarLink");
+initAvatarPicker("avatarPickerHome", "avatar");
+initAvatarPicker("avatarPickerLink", "avatarLink");
+
+/* ── Запоминание ника (localStorage) ── */
+const NICK_KEY = "vc_nickname";
+const savedNick = localStorage.getItem(NICK_KEY);
+if (savedNick) {
+    document.getElementById("nickname").value     = savedNick;
+    document.getElementById("nicknameLink").value = savedNick;
+}
 
 /* ── Определяем режим: обычный или по ссылке ── */
 const urlParams = new URLSearchParams(window.location.search);
@@ -127,24 +124,9 @@ function getNickname(inputId) {
 function createRoom() {
     const name = getNickname("nickname");
     if (!name) return;
+    localStorage.setItem(NICK_KEY, name);
     const avatar = document.getElementById("avatar").value;
     const room = generateCode();
-    goToLobby(room, name, avatar);
-}
-
-/* ── Войти по коду или ссылке ── */
-function joinRoom() {
-    const name = getNickname("nickname");
-    if (!name) return;
-    const avatar = document.getElementById("avatar").value;
-    let input = document.getElementById("roomInput").value.trim();
-    if (!input) { alert("Введите код комнаты или ссылку"); return; }
-    let room = input;
-    try {
-        const url = new URL(input);
-        const r = url.searchParams.get("room");
-        if (r) room = r;
-    } catch(e) { /* просто код */ }
     goToLobby(room, name, avatar);
 }
 
@@ -152,6 +134,7 @@ function joinRoom() {
 function joinViaLink() {
     const name = getNickname("nicknameLink");
     if (!name) return;
+    localStorage.setItem(NICK_KEY, name);
     const avatar = document.getElementById("avatarLink").value;
     goToLobby(preRoom, name, avatar);
 }
@@ -159,6 +142,51 @@ function joinViaLink() {
 /* ── Перейти в лобби ── */
 function goToLobby(room, name, avatar) {
     window.location = `/lobby.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar)}`;
+}
+
+/* ── Онлайн-счётчик с flip-анимацией ── */
+let lastOnline = -1;
+
+function renderFlipCounter(el, newVal) {
+    const str = String(Math.max(0, newVal));
+    const cur = el.querySelectorAll(".flip-digit");
+    /* adjust digit count */
+    while (el.children.length < str.length) {
+        const d = document.createElement("span");
+        d.className = "flip-digit";
+        d.innerHTML = '<span class="digit-val">0</span>';
+        el.prepend(d);
+    }
+    while (el.children.length > str.length) el.firstChild.remove();
+    [...el.querySelectorAll(".flip-digit")].forEach((d, i) => {
+        const v = d.querySelector(".digit-val");
+        if (!v) return;
+        if (v.textContent !== str[i]) {
+            v.textContent = str[i];
+            d.classList.remove("flipping");
+            void d.offsetWidth; /* force reflow */
+            d.classList.add("flipping");
+        }
+    });
+}
+
+function pollOnline() {
+    fetch("/api/online")
+        .then(r => r.json())
+        .then(data => {
+            const count = typeof data.online === "number" ? data.online : 0;
+            if (count !== lastOnline) {
+                lastOnline = count;
+                const el = document.getElementById("onlineFlipCounter");
+                if (el) renderFlipCounter(el, count);
+            }
+        })
+        .catch(() => {});
+}
+/* Only poll on the home card page */
+if (!preRoom) {
+    pollOnline();
+    setInterval(pollOnline, 6000);
 }
 </script>
 

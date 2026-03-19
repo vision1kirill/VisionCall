@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="hex4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="14" fill="url(#bg4)"/>
+  <!-- Hexagon -->
+  <polygon points="32,6 56,19 56,45 32,58 8,45 8,19" fill="url(#hex4)" opacity="0.85"/>
+  <!-- Inner hexagon (glass effect) -->
+  <polygon points="32,11 51,21.5 51,42.5 32,53 13,42.5 13,21.5" fill="none" stroke="white" stroke-width="0.8" opacity="0.25"/>
+  <!-- Play triangle / camera icon inside -->
+  <polygon points="25,24 25,40 43,32" fill="white" opacity="0.95"/>
+  <!-- Subtle shine arc top-left -->
+  <path d="M16,20 Q20,12 30,10" stroke="white" stroke-width="1.5" fill="none" opacity="0.3" stroke-linecap="round"/>
+</svg>

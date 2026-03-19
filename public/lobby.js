@@ -28,9 +28,18 @@ const micGainSlider    = document.getElementById("micGainSlider");
 const gainValueEl      = document.getElementById("gainValue");
 const earphoneHint     = document.getElementById("earphoneHint");
 
-lobbyNameEl.textContent     = name;
-lobbyAvatarEl.textContent   = avatar;
-previewAvatarEl.textContent = avatar;
+lobbyNameEl.textContent = name;
+
+/* ── Отображаем SVG-аватар (или эмодзи для обратной совместимости) ── */
+function setAvatarEl(el, key) {
+    if (window.AVATARS && window.AVATARS[key]) {
+        el.innerHTML = window.AVATARS[key];
+    } else {
+        el.textContent = key;
+    }
+}
+setAvatarEl(lobbyAvatarEl,   avatar);
+setAvatarEl(previewAvatarEl, avatar);
 
 /* ── SVG иконки ── */
 const SVG = {

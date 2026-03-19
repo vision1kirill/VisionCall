@@ -17,9 +17,6 @@
 
   <div class="room-info">
     <span id="roomTitle"></span>
-    <button id="copyBtn" aria-label="Скопировать ссылку" title="Скопировать ссылку на комнату">
-      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-    </button>
   </div>
 
   <div></div>
@@ -73,6 +70,11 @@
     <!-- иконка задаётся через app.js -->
   </button>
 
+  <!-- Кнопка копирования ссылки — перенесена из топбара -->
+  <button id="copyBtn" aria-label="Скопировать ссылку на комнату" title="Поделиться ссылкой">
+    <!-- иконка задаётся через app.js -->
+  </button>
+
   <button id="chatBtn" aria-label="Открыть чат" aria-pressed="false" title="Чат">
     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
   </button>
@@ -84,6 +86,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="avatars.js"></script>
 <script src="app.js"></script>
 <script src="chat.js"></script>
 

@@ -28,6 +28,11 @@ app.get("/health", (_req, res) => {
     res.json({ status: "ok", rooms: rooms.size, uptime: process.uptime() });
 });
 
+/* ── Счётчик онлайна для главной страницы ── */
+app.get("/api/online", (_req, res) => {
+    res.json({ online: io.sockets.sockets.size });
+});
+
 /* ════════════════════════════════════════════
    ХРАНИЛИЩЕ КОМНАТ
    Map вместо plain-object → нет prototype-pollution
@@ -79,7 +84,7 @@ io.on("connection", socket => {
     socket.on("join-room", data => {
         const room   = sanitizeRoom(data.room);
         const name   = String(data.name   || "Участник").slice(0, 64);
-        const avatar = String(data.avatar || "🙂").slice(0, 8);
+        const avatar = String(data.avatar || "po").slice(0, 16);
 
         if (!room) { socket.emit("room-error", "Неверный код комнаты"); return; }
 

@@ -1116,3 +1116,162 @@ input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
 }
+
+/* ═══════════════════════════════════════
+   SVG AVATAR PICKER
+═══════════════════════════════════════ */
+.avatar-picker {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+.avatar-option {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    transition: border-color 0.15s, background 0.15s, transform 0.12s;
+    overflow: hidden;
+}
+.avatar-option svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.avatar-option:hover {
+    border-color: rgba(99,102,241,0.55);
+    background: rgba(99,102,241,0.1);
+    transform: scale(1.06);
+}
+.avatar-option.selected {
+    border-color: var(--accent);
+    background: rgba(99,102,241,0.18);
+    box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+/* ── SVG в видео-боксах (когда камера выкл.) ── */
+.avatar {
+    overflow: hidden;
+}
+.avatar svg {
+    width: 64px;
+    height: 64px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* ── SVG в маленьком аватаре лобби ── */
+.lobby-user-avatar {
+    overflow: hidden;
+}
+.lobby-user-avatar svg {
+    width: 32px;
+    height: 32px;
+    display: block;
+}
+
+/* ── SVG в большом превью лобби ── */
+.lobby-preview-off .big-avatar {
+    overflow: hidden;
+}
+.lobby-preview-off .big-avatar svg {
+    width: 80px;
+    height: 80px;
+    display: block;
+}
+
+/* ═══════════════════════════════════════
+   ОНЛАЙН-СЧЁТЧИК на главной
+═══════════════════════════════════════ */
+.online-counter-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 2px 0;
+}
+.online-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green-glow);
+    flex-shrink: 0;
+    animation: online-pulse 2.4s ease-in-out infinite;
+}
+@keyframes online-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.8); }
+}
+.online-label {
+    font-size: 13px;
+    color: var(--text3);
+}
+.flip-counter {
+    display: flex;
+    gap: 2px;
+    font-family: "SF Mono", "Fira Code", "Fira Mono", monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    align-items: center;
+}
+.flip-digit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 5px;
+    width: 22px;
+    height: 26px;
+    position: relative;
+    overflow: hidden;
+}
+.flip-digit .digit-val {
+    display: block;
+    line-height: 1;
+}
+@keyframes flip-in {
+    0%   { transform: translateY(-110%); opacity: 0; }
+    100% { transform: translateY(0);     opacity: 1; }
+}
+.flip-digit.flipping .digit-val {
+    animation: flip-in 0.28s cubic-bezier(.22,.68,0,1.2) forwards;
+}
+
+/* ═══════════════════════════════════════
+   КНОПКА КОПИРОВАНИЯ ССЫЛКИ В CONTROLS
+═══════════════════════════════════════ */
+#copyBtn {
+    /* Override topbar-specific sizing — use controls button defaults */
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s, color 0.2s;
+}
+#copyBtn svg { width: 22px; height: 22px; }
+#copyBtn:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    transform: scale(1.08);
+}
+#copyBtn.copy-success {
+    background: rgba(34,197,94,0.18);
+    border-color: var(--green);
+    color: var(--green);
+}
