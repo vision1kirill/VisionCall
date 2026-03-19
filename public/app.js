@@ -2,22 +2,40 @@ const params = new URLSearchParams(window.location.search);
 const room   = params.get("room");
 const name   = params.get("name");
 const avatar = params.get("avatar") || "🙂";
+const initMic = params.get("mic") === "1";
+const initCam = params.get("cam") === "1";
 
-// Если зашли по голой ссылке без никнейма — отправляем на главную,
-// где код комнаты уже будет вставлен в поле "Войти в существующую"
+/* Redirect if no name — send back to home with room code pre-filled */
 if (!name || name === "null") {
-    const redirect = room
-        ? `/?room=${encodeURIComponent(room)}`
-        : "/";
+    const redirect = room ? `/?room=${encodeURIComponent(room)}` : "/";
     window.location.replace(redirect);
-    throw new Error("redirect"); // останавливаем выполнение скрипта
+    throw new Error("redirect");
 }
+
+/* ════════════════════════════════════════════
+   SVG ICON STRINGS
+════════════════════════════════════════════ */
+const ICONS = {
+    micOn:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>`,
+    micOff: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
+    camOn:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
+    camOff: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06A4 4 0 1 1 7.72 7.72"/></svg>`,
+    screenOn:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="8 10 12 6 16 10"/></svg>`,
+    screenOff: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+    copyLink: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    copied:    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    /* small inline icons for name label */
+    labelMicOn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
+    labelMicOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
+    labelCamOn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
+    labelCamOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>`,
+};
 
 const socket = io();
 
-document.getElementById("roomTitle").innerText = "Комната: " + room;
+document.getElementById("roomTitle").innerText = room;
 
-const videoGrid = document.getElementById("videoGrid");
+const videoGrid      = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
 
 const micBtn    = document.getElementById("micBtn");
@@ -32,14 +50,15 @@ let localStream  = null;
 let screenStream = null;
 const peerConnections = {};
 const peerMeta    = {};
-const makingOffer = {};   // предотвращает двойные offer'ы
+const makingOffer = {};
 
-let micEnabled    = false;
-let camEnabled    = false;
+/* Initial states come from lobby params */
+let micEnabled    = initMic;
+let camEnabled    = initCam;
 let screenEnabled = false;
-let facingMode    = "user"; // "user" = фронтальная, "environment" = основная
+let facingMode    = "user";
 
-// AudioContext для определения говорящего
+/* AudioContext for speaking detection */
 let audioCtx = null;
 function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -62,7 +81,7 @@ const servers = {
 };
 
 /* ════════════════════════════════════════════
-   УЧАСТНИКИ
+   PARTICIPANTS
 ════════════════════════════════════════════ */
 function addParticipant(id, username) {
     if (document.getElementById("participant-" + id)) return;
@@ -73,13 +92,20 @@ function addParticipant(id, username) {
     participantsDiv.appendChild(div);
 }
 function removeParticipant(id) {
-    const el = document.getElementById("participant-" + id);
-    if (el) el.remove();
+    document.getElementById("participant-" + id)?.remove();
 }
 
 /* ════════════════════════════════════════════
-   ВИДЕО-БЛОКИ
+   VIDEO BOXES
 ════════════════════════════════════════════ */
+function makeLabelHTML(username, micOn, camOn) {
+    const micClass = micOn ? "icon mic-on" : "icon mic-off";
+    const camClass = camOn ? "icon cam-on" : "icon cam-off";
+    const micIcon  = micOn ? ICONS.labelMicOn : ICONS.labelMicOff;
+    const camIcon  = camOn ? ICONS.labelCamOn : ICONS.labelCamOff;
+    return `<span class="label-name">${username}</span><span class="${micClass}">${micIcon}</span><span class="${camClass}">${camIcon}</span>`;
+}
+
 function createVideoBox(id, username, userAvatar) {
     if (document.getElementById("box-" + id)) return;
     const box = document.createElement("div");
@@ -94,7 +120,7 @@ function createVideoBox(id, username, userAvatar) {
     const label = document.createElement("div");
     label.className = "name-label";
     label.id = "label-" + id;
-    label.innerHTML = `${username} <span class="icon mic">🔇</span><span class="icon cam">🚫</span>`;
+    label.innerHTML = makeLabelHTML(username, false, false);
     box.appendChild(label);
 
     videoGrid.appendChild(box);
@@ -115,8 +141,6 @@ function showVideoInBox(id, stream, muted, isScreen) {
     if (isScreen) {
         video.classList.add("screen-video");
     } else if (id === "local" && facingMode === "user") {
-        // Фронтальная камера: зеркалим локальный превью (как в FaceTime/Zoom).
-        // На iOS Safari она уже зеркалится браузером, поэтому flip отменяет это.
         video.classList.add("flip-h");
     }
     box.insertBefore(video, document.getElementById("label-" + id));
@@ -144,7 +168,7 @@ function removeVideoBox(id) {
     updateGridLayout();
 }
 
-/* ── Динамический размер сетки ── */
+/* ── Dynamic grid layout ── */
 function updateGridLayout() {
     const count = videoGrid.querySelectorAll(".video-box").length;
     if (count <= 1) {
@@ -163,7 +187,7 @@ function updateGridLayout() {
 }
 
 /* ════════════════════════════════════════════
-   ИНДИКАТОР ГОВОРЯЩЕГО
+   SPEAKING INDICATOR
 ════════════════════════════════════════════ */
 const speakingTimers = {};
 
@@ -176,16 +200,14 @@ function monitorSpeaking(id, stream) {
         analyser.smoothingTimeConstant = 0.6;
         source.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
-
         function check() {
-            if (!document.getElementById("box-" + id)) return; // пир ушёл
+            if (!document.getElementById("box-" + id)) return;
             analyser.getByteFrequencyData(data);
             let sum = 0;
             for (let i = 0; i < data.length; i++) sum += data[i];
-            const avg = sum / data.length;
             const box = document.getElementById("box-" + id);
             if (!box) return;
-            if (avg > 12) {
+            if (sum / data.length > 12) {
                 box.classList.add("speaking");
                 clearTimeout(speakingTimers[id]);
                 speakingTimers[id] = setTimeout(() => box.classList.remove("speaking"), 600);
@@ -193,13 +215,11 @@ function monitorSpeaking(id, stream) {
             requestAnimationFrame(check);
         }
         requestAnimationFrame(check);
-    } catch (e) {
-        // AudioContext недоступен — пропускаем
-    }
+    } catch (e) { /* AudioContext unavailable */ }
 }
 
 /* ════════════════════════════════════════════
-   ФОКУС: КЛИК НА ВИДЕО → РАЗВОРАЧИВАЕТСЯ
+   CLICK-TO-EXPAND
 ════════════════════════════════════════════ */
 const backdrop = document.createElement("div");
 backdrop.id = "videoBackdrop";
@@ -209,11 +229,9 @@ function expandBox(box) {
     document.querySelectorAll(".video-box.expanded").forEach(b => b.classList.remove("expanded"));
     box.classList.add("expanded");
     backdrop.classList.add("active");
-    // contain для любого видео в раскрытом боксе
     const vid = box.querySelector("video");
     if (vid) vid.style.objectFit = "contain";
 }
-
 function collapseAll() {
     document.querySelectorAll(".video-box.expanded").forEach(box => {
         box.classList.remove("expanded");
@@ -222,18 +240,12 @@ function collapseAll() {
     });
     backdrop.classList.remove("active");
 }
-
 backdrop.addEventListener("click", collapseAll);
 document.addEventListener("keydown", e => { if (e.key === "Escape") collapseAll(); });
-
 videoGrid.addEventListener("click", e => {
     const box = e.target.closest(".video-box");
     if (!box) return;
-    if (box.classList.contains("expanded")) {
-        collapseAll();
-    } else {
-        expandBox(box);
-    }
+    box.classList.contains("expanded") ? collapseAll() : expandBox(box);
 });
 
 /* ════════════════════════════════════════════
@@ -243,9 +255,12 @@ if (copyBtn) {
     copyBtn.onclick = e => {
         e.stopPropagation();
         const url = `${location.origin}/room.html?room=${encodeURIComponent(room)}`;
+        const restore = () => {
+            setTimeout(() => { copyBtn.innerHTML = ICONS.copyLink; }, 2000);
+        };
         navigator.clipboard.writeText(url).then(() => {
-            copyBtn.innerText = "✅";
-            setTimeout(() => copyBtn.innerText = "🔗", 2000);
+            copyBtn.innerHTML = ICONS.copied;
+            restore();
         }).catch(() => {
             const inp = document.createElement("input");
             inp.value = url;
@@ -253,25 +268,25 @@ if (copyBtn) {
             inp.select();
             document.execCommand("copy");
             inp.remove();
-            copyBtn.innerText = "✅";
-            setTimeout(() => copyBtn.innerText = "🔗", 2000);
+            copyBtn.innerHTML = ICONS.copied;
+            restore();
         });
     };
 }
 
 /* ════════════════════════════════════════════
-   МОБИЛЬНЫЙ ЧАТ
+   MOBILE CHAT
 ════════════════════════════════════════════ */
 const sidebar = document.querySelector(".sidebar");
 if (chatBtn && sidebar) {
     chatBtn.onclick = () => {
         sidebar.classList.toggle("mobile-open");
-        chatBtn.style.background = sidebar.classList.contains("mobile-open") ? "#3b82f6" : "";
+        chatBtn.classList.toggle("btn-active", sidebar.classList.contains("mobile-open"));
     };
 }
 
 /* ════════════════════════════════════════════
-   ДОСТУП К КАМЕРЕ / МИКРОФОНУ
+   CAMERA / MIC ACCESS
 ════════════════════════════════════════════ */
 async function startCamera(facing) {
     const mode = facing || facingMode;
@@ -281,11 +296,10 @@ async function startCamera(facing) {
             audio: true
         });
     } catch (_) {
-        // Если конкретная камера недоступна — пробуем без ограничений
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         } catch (e) {
-            alert("Нет доступа к камере/микрофону: " + e.message);
+            alert("No camera/microphone access: " + e.message);
             return;
         }
     }
@@ -293,12 +307,10 @@ async function startCamera(facing) {
     localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
 }
 
-/* ── Переключить между фронтальной и основной камерой ── */
+/* ── Switch front / rear camera ── */
 async function switchCamera() {
     if (!camEnabled) return;
-
     facingMode = (facingMode === "user") ? "environment" : "user";
-
     try {
         const newStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode },
@@ -306,40 +318,34 @@ async function switchCamera() {
         });
         const newVideoTrack = newStream.getVideoTracks()[0];
         newVideoTrack.enabled = true;
-
-        // Заменяем видео-трек в localStream
         const oldTrack = localStream?.getVideoTracks()[0];
         if (oldTrack) { oldTrack.stop(); localStream.removeTrack(oldTrack); }
         localStream.addTrack(newVideoTrack);
-
-        // Заменяем трек во всех peer-соединениях
         for (const [, pc] of Object.entries(peerConnections)) {
             const sender = pc.getSenders().find(s => s.track?.kind === "video");
             if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
         }
-
         showVideoInBox("local", localStream, true, false);
     } catch (e) {
-        alert("Не удалось переключить камеру: " + e.message);
-        // Откатываем
+        alert("Could not switch camera: " + e.message);
         facingMode = (facingMode === "user") ? "environment" : "user";
     }
 }
 
-/* ── Добавить/заменить трек во всех соединениях ── */
+/* ── Add/replace track in all peers ── */
 function addTrackToPeers(track, stream) {
     for (const [, pc] of Object.entries(peerConnections)) {
         const existing = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
         if (existing) {
             existing.replaceTrack(track).catch(() => {});
         } else {
-            pc.addTrack(track, stream); // автоматически вызовет onnegotiationneeded
+            pc.addTrack(track, stream);
         }
     }
 }
 
 /* ════════════════════════════════════════════
-   PEER CONNECTION (с perfect negotiation)
+   PEER CONNECTION (perfect negotiation)
 ════════════════════════════════════════════ */
 function createPeer(id) {
     if (peerConnections[id]) return peerConnections[id];
@@ -347,9 +353,8 @@ function createPeer(id) {
     const pc = new RTCPeerConnection(servers);
     makingOffer[id] = false;
 
-    // Автоматическая перестройка при добавлении треков ПОСЛЕ соединения
     pc.onnegotiationneeded = async () => {
-        if (makingOffer[id]) return; // уже создаём offer — пропускаем
+        if (makingOffer[id]) return;
         try {
             makingOffer[id] = true;
             const offer = await pc.createOffer();
@@ -364,10 +369,9 @@ function createPeer(id) {
     };
 
     pc.ontrack = e => {
-        const meta = peerMeta[id] || { name: "Участник", avatar: "🙂" };
+        const meta = peerMeta[id] || { name: "Participant", avatar: "🙂" };
         if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
         showVideoInBox(id, e.streams[0], false, false);
-        // Запускаем детектор речи для входящего аудио
         monitorSpeaking(id, e.streams[0]);
     };
 
@@ -385,11 +389,10 @@ function createPeer(id) {
 }
 
 /* ════════════════════════════════════════════
-   SOCKET СОБЫТИЯ
+   SOCKET EVENTS
 ════════════════════════════════════════════ */
 socket.emit("join-room", { room, name, avatar });
 
-// Уже существующие в комнате — готовим peer'ы, OFFER придёт от них через user-connected
 socket.on("room-users", existingUsers => {
     for (const user of existingUsers) {
         peerMeta[user.id] = { name: user.name, avatar: user.avatar };
@@ -399,7 +402,6 @@ socket.on("room-users", existingUsers => {
     }
 });
 
-// Новый участник зашёл — МЫ создаём offer (мы старожилы)
 socket.on("user-connected", async data => {
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "🙂" };
     addParticipant(data.id, data.name);
@@ -407,7 +409,6 @@ socket.on("user-connected", async data => {
 
     const pc = createPeer(data.id);
 
-    // Добавляем ВСЕ текущие треки: и камеру/микрофон, и демонстрацию
     if (localStream) {
         localStream.getTracks().forEach(track => {
             if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
@@ -418,8 +419,6 @@ socket.on("user-connected", async data => {
         if (st && !pc.getSenders().find(s => s.track === st)) pc.addTrack(st, screenStream);
     }
 
-    // ВСЕГДА явно создаём offer — не полагаемся только на onnegotiationneeded,
-    // чтобы новый участник гарантированно получил все треки
     try {
         makingOffer[data.id] = true;
         const offer = await pc.createOffer();
@@ -432,7 +431,6 @@ socket.on("user-connected", async data => {
     }
 });
 
-// Получили offer — perfect negotiation с rollback при коллизии
 socket.on("offer", async data => {
     if (data.name) {
         peerMeta[data.from] = { name: data.name, avatar: data.avatar || "🙂" };
@@ -441,16 +439,15 @@ socket.on("offer", async data => {
             addParticipant(data.from, data.name);
         } else {
             const label = document.getElementById("label-" + data.from);
-            if (label) label.innerHTML = `${data.name} <span class="icon mic">🔇</span><span class="icon cam">🚫</span>`;
+            if (label) label.innerHTML = makeLabelHTML(data.name, false, false);
         }
     }
 
     const pc = createPeer(data.from);
-
     const collision = makingOffer[data.from] || pc.signalingState !== "stable";
     if (collision) {
         const polite = socket.id > data.from;
-        if (!polite) return; // мы важнее — игнорируем их offer
+        if (!polite) return;
         try {
             await pc.setLocalDescription({ type: "rollback" });
         } catch (e) {
@@ -459,7 +456,6 @@ socket.on("offer", async data => {
         }
     }
 
-    // Добавляем свои треки
     if (localStream) {
         localStream.getTracks().forEach(track => {
             if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
@@ -494,13 +490,13 @@ socket.on("screen-share-state", data => {
 });
 
 /* ════════════════════════════════════════════
-   ИКОНКИ / СОСТОЯНИЕ МЕДИА
+   ICON / STATE HELPERS
 ════════════════════════════════════════════ */
 function updateLabelIcons(id, micOn, camOn) {
     const label = document.getElementById("label-" + id);
     if (!label) return;
-    label.querySelector(".mic").innerText = micOn ? "🎤" : "🔇";
-    label.querySelector(".cam").innerText = camOn ? "📷" : "🚫";
+    const meta = id === "local" ? { name } : (peerMeta[id] || { name: "Participant" });
+    label.innerHTML = makeLabelHTML(meta.name, micOn, camOn);
 }
 function emitMediaState() {
     socket.emit("media-state", { mic: micEnabled, cam: camEnabled });
@@ -508,69 +504,74 @@ function emitMediaState() {
 socket.on("media-state", data => updateLabelIcons(data.from, data.mic, data.cam));
 
 /* ════════════════════════════════════════════
-   КНОПКА МИКРОФОН
+   MIC BUTTON
 ════════════════════════════════════════════ */
+function setMicIcon() {
+    micBtn.innerHTML = micEnabled ? ICONS.micOn : ICONS.micOff;
+    micBtn.className = micEnabled ? "btn-active" : "btn-inactive";
+    micBtn.title = micEnabled ? "Mute" : "Unmute";
+}
+
 micBtn.onclick = async () => {
     if (!localStream) await startCamera();
     if (!localStream) return;
-
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => {
         t.enabled = micEnabled;
         addTrackToPeers(t, localStream);
     });
-
-    micBtn.innerText = micEnabled ? "🎤" : "🔇";
-    micBtn.style.background = micEnabled ? "#22c55e" : "";
+    setMicIcon();
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
-
-    // Запускаем индикатор речи для себя когда включаем микрофон
     if (micEnabled) monitorSpeaking("local", localStream);
 };
 
 /* ════════════════════════════════════════════
-   КНОПКА КАМЕРА
+   CAM BUTTON
 ════════════════════════════════════════════ */
+function setCamIcon() {
+    camBtn.innerHTML = camEnabled ? ICONS.camOn : ICONS.camOff;
+    camBtn.className = camEnabled ? "btn-active" : "btn-inactive";
+    camBtn.title = camEnabled ? "Turn off camera" : "Turn on camera";
+}
+
 camBtn.onclick = async () => {
     if (!localStream) await startCamera();
     if (!localStream) return;
-
     camEnabled = !camEnabled;
     localStream.getVideoTracks().forEach(t => {
         t.enabled = camEnabled;
         addTrackToPeers(t, localStream);
     });
-
-    camBtn.innerText = camEnabled ? "📷" : "🚫";
-    camBtn.style.background = camEnabled ? "#22c55e" : "";
+    setCamIcon();
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
-
-    // Кнопка переключения камеры — только когда камера включена
     if (flipBtn) flipBtn.style.display = camEnabled ? "" : "none";
-
     if (camEnabled) showVideoInBox("local", localStream, true, false);
     else            showAvatarInBox("local", avatar);
 };
 
-/* ── КНОПКА ПЕРЕКЛЮЧЕНИЯ КАМЕРЫ ── */
+/* ── Flip camera ── */
 if (flipBtn) {
-    flipBtn.style.display = "none"; // скрыта пока камера выключена
     flipBtn.onclick = () => switchCamera();
 }
 
 /* ════════════════════════════════════════════
-   ДЕМОНСТРАЦИЯ ЭКРАНА
+   SCREEN SHARE BUTTON
 ════════════════════════════════════════════ */
+function setScreenIcon() {
+    screenBtn.innerHTML = screenEnabled ? ICONS.screenOn : ICONS.screenOff;
+    screenBtn.className = screenEnabled ? "btn-screen-active" : "";
+    screenBtn.title = screenEnabled ? "Stop sharing" : "Share screen";
+}
+
 screenBtn.onclick = async () => {
     if (screenEnabled) {
         screenStream?.getTracks().forEach(t => t.stop());
-        screenStream    = null;
-        screenEnabled   = false;
-        screenBtn.style.background = "";
+        screenStream  = null;
+        screenEnabled = false;
+        setScreenIcon();
         socket.emit("screen-share-state", { sharing: false });
-
         if (localStream) {
             const camTrack = localStream.getVideoTracks()[0];
             if (camTrack) {
@@ -584,13 +585,11 @@ screenBtn.onclick = async () => {
         else showAvatarInBox("local", avatar);
         return;
     }
-
     try {
         screenStream  = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         screenEnabled = true;
-        screenBtn.style.background = "#22c55e";
+        setScreenIcon();
         socket.emit("screen-share-state", { sharing: true });
-
         const screenTrack = screenStream.getVideoTracks()[0];
         for (const [, pc] of Object.entries(peerConnections)) {
             const s = pc.getSenders().find(s => s.track?.kind === "video");
@@ -598,15 +597,14 @@ screenBtn.onclick = async () => {
             else   pc.addTrack(screenTrack, screenStream);
         }
         showVideoInBox("local", screenStream, true, true);
-
         screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
-        if (e.name !== "NotAllowedError") alert("Не удалось начать демонстрацию: " + e.message);
+        if (e.name !== "NotAllowedError") alert("Could not start screen share: " + e.message);
     }
 };
 
 /* ════════════════════════════════════════════
-   ВЫХОД
+   LEAVE BUTTON
 ════════════════════════════════════════════ */
 leaveBtn.onclick = () => {
     Object.values(peerConnections).forEach(pc => pc.close());
@@ -615,7 +613,28 @@ leaveBtn.onclick = () => {
     window.location = "/";
 };
 
-/* ── Начальный рендер ── */
+/* ════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════ */
 createVideoBox("local", name, avatar);
 addParticipant("local", name);
 updateGridLayout();
+
+/* Set initial button icons */
+setMicIcon();
+setCamIcon();
+setScreenIcon();
+
+/* If lobby enabled cam/mic, start the stream immediately */
+if (initMic || initCam) {
+    startCamera().then(() => {
+        if (!localStream) return;
+        if (initMic) monitorSpeaking("local", localStream);
+        if (initCam) {
+            showVideoInBox("local", localStream, true, false);
+            if (flipBtn) flipBtn.style.display = "";
+        }
+        updateLabelIcons("local", micEnabled, camEnabled);
+        emitMediaState();
+    });
+}

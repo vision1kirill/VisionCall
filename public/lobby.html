@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionCall — Preview</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="lobby-page">
+
+<div class="lobby-card">
+
+  <div class="lobby-header">
+    <div class="logo-text">VisionCall</div>
+    <div class="lobby-user" id="lobbyUser">
+      <div class="lobby-user-avatar" id="lobbyAvatar"></div>
+      <span id="lobbyName"></span>
+    </div>
+  </div>
+
+  <!-- Camera preview -->
+  <div class="lobby-preview" id="lobbyPreview">
+    <div class="lobby-preview-off" id="previewOff">
+      <div class="big-avatar" id="previewAvatar"></div>
+      <p>Camera is off</p>
+    </div>
+    <!-- video injected by JS -->
+  </div>
+
+  <!-- Mic / Cam toggle buttons -->
+  <div class="lobby-controls">
+
+    <button class="lobby-ctrl-btn" id="lobbyMicBtn" title="Toggle microphone">
+      <!-- icon set by JS -->
+    </button>
+
+    <button class="lobby-ctrl-btn" id="lobbyCamBtn" title="Toggle camera">
+      <!-- icon set by JS -->
+    </button>
+
+  </div>
+
+  <p class="lobby-status" id="lobbyStatus">Set up your camera and microphone before joining.</p>
+
+  <!-- Join button -->
+  <button class="lobby-join-btn" id="lobbyJoinBtn">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+    Join Room
+  </button>
+
+</div>
+
+<script src="lobby.js"></script>
+</body>
+</html>
