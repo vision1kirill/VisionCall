@@ -1,9 +1,10 @@
 const params = new URLSearchParams(window.location.search);
-const room   = params.get("room");
-const name   = params.get("name");
-const avatar = params.get("avatar") || "🙂";
-const initMic = params.get("mic") === "1";
-const initCam = params.get("cam") === "1";
+const room     = params.get("room");
+const name     = params.get("name");
+const avatar   = params.get("avatar") || "🙂";
+const initMic  = params.get("mic") === "1";
+const initCam  = params.get("cam") === "1";
+const initGain = Math.max(0, Math.min(2, parseInt(params.get("micGain") || "100") / 100));
 
 /* Redirect if no name — send back to home with room code pre-filled */
 if (!name || name === "null") {
@@ -58,11 +59,37 @@ let camEnabled    = initCam;
 let screenEnabled = false;
 let facingMode    = "user";
 
-/* AudioContext for speaking detection */
-let audioCtx = null;
+/* AudioContext for speaking detection + mic gain */
+let audioCtx    = null;
+let micGainNode = null; /* controls input gain sent through WebRTC */
+
 function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     return audioCtx;
+}
+
+/* Creates a processed audio track with the given gain,
+   returns a new MediaStream whose audio goes through GainNode.
+   This stream's audio track is used in place of the raw mic track. */
+function buildGainedStream(rawStream, gain) {
+    try {
+        const ctx  = getAudioCtx();
+        const src  = ctx.createMediaStreamSource(rawStream);
+        const gn   = ctx.createGain();
+        gn.gain.value = gain;
+        micGainNode = gn;
+        const dest = ctx.createMediaStreamDestination();
+        src.connect(gn);
+        gn.connect(dest);
+        /* Combine the processed audio track with original video tracks */
+        const out = new MediaStream();
+        rawStream.getVideoTracks().forEach(t => out.addTrack(t));
+        dest.stream.getAudioTracks().forEach(t => out.addTrack(t));
+        return out;
+    } catch (e) {
+        micGainNode = null;
+        return rawStream; /* fallback: use raw stream */
+    }
 }
 
 /* ── ICE SERVERS ── */
@@ -159,6 +186,7 @@ function showAvatarInBox(id, userAvatar) {
 }
 
 function removeVideoBox(id) {
+    removeRemoteScreenAudio(id);
     document.getElementById("box-" + id)?.remove();
     removeParticipant(id);
     peerConnections[id]?.close();
@@ -290,19 +318,22 @@ if (chatBtn && sidebar) {
 ════════════════════════════════════════════ */
 async function startCamera(facing) {
     const mode = facing || facingMode;
+    let rawStream;
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({
+        rawStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: mode },
             audio: true
         });
     } catch (_) {
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         } catch (e) {
             alert("No camera/microphone access: " + e.message);
             return;
         }
     }
+    /* Apply mic gain from lobby (initGain, 0–2) */
+    localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
     localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
 }
@@ -345,6 +376,56 @@ function addTrackToPeers(track, stream) {
 }
 
 /* ════════════════════════════════════════════
+   REMOTE SCREEN SHARE AUDIO
+════════════════════════════════════════════ */
+const remoteScreenAudioEls = {}; /* id → {audio, panel} */
+
+function showRemoteScreenAudio(id, stream) {
+    /* Remove old one if exists */
+    removeRemoteScreenAudio(id);
+
+    const audio = document.createElement("audio");
+    audio.autoplay = true;
+    audio.srcObject = stream;
+    document.body.appendChild(audio);
+
+    /* Show volume control panel attached to that peer's video box */
+    const box = document.getElementById("box-" + id);
+    if (box) {
+        const panel = document.createElement("div");
+        panel.className = "screen-audio-panel remote-screen-audio-panel";
+        panel.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            <span class="screen-audio-label">Screen audio</span>
+            <input type="range" class="screen-audio-slider-remote" min="0" max="200" value="100" step="5">
+            <span class="screen-audio-value">100%</span>`;
+        box.appendChild(panel);
+
+        const slider = panel.querySelector(".screen-audio-slider-remote");
+        const valEl  = panel.querySelector(".screen-audio-value");
+        slider.oninput = function() {
+            const pct = parseInt(this.value);
+            valEl.textContent = pct + "%";
+            audio.volume = Math.min(1, pct / 100);
+        };
+
+        remoteScreenAudioEls[id] = { audio, panel };
+    } else {
+        remoteScreenAudioEls[id] = { audio, panel: null };
+    }
+}
+
+function removeRemoteScreenAudio(id) {
+    const entry = remoteScreenAudioEls[id];
+    if (!entry) return;
+    entry.audio?.remove();
+    entry.panel?.remove();
+    delete remoteScreenAudioEls[id];
+}
+
+/* ════════════════════════════════════════════
    PEER CONNECTION (perfect negotiation)
 ════════════════════════════════════════════ */
 function createPeer(id) {
@@ -371,8 +452,21 @@ function createPeer(id) {
     pc.ontrack = e => {
         const meta = peerMeta[id] || { name: "Participant", avatar: "🙂" };
         if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
-        showVideoInBox(id, e.streams[0], false, false);
-        monitorSpeaking(id, e.streams[0]);
+
+        if (e.track.kind === "video") {
+            /* Video track — show in video box (stream also carries mic audio) */
+            showVideoInBox(id, e.streams[0], false, false);
+            monitorSpeaking(id, e.streams[0]);
+        } else if (e.track.kind === "audio") {
+            /* Check if this is screen share audio (separate stream from the main video) */
+            const box = document.getElementById("box-" + id);
+            const existingVideo = box?.querySelector("video");
+            const isScreenAudio = existingVideo && existingVideo.srcObject !== e.streams[0];
+            if (isScreenAudio) {
+                /* Play screen share audio in a separate <audio> element with volume control */
+                showRemoteScreenAudio(id, e.streams[0]);
+            }
+        }
     };
 
     pc.onicecandidate = e => {
@@ -565,6 +659,52 @@ function setScreenIcon() {
     screenBtn.title = screenEnabled ? "Stop sharing" : "Share screen";
 }
 
+/* ── Screen share audio: local <audio> element for the sharer to hear ── */
+let screenAudioEl = null;
+
+function showScreenAudioPanel(stream) {
+    let panel = document.getElementById("screenAudioPanel");
+    if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "screenAudioPanel";
+        panel.className = "screen-audio-panel";
+        panel.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            <span class="screen-audio-label">Screen audio</span>
+            <input type="range" id="screenAudioSlider" min="0" max="200" value="100" step="5">
+            <span class="screen-audio-value" id="screenAudioValue">100%</span>`;
+        document.querySelector(".controls").prepend(panel);
+
+        document.getElementById("screenAudioSlider").oninput = function() {
+            const pct = parseInt(this.value);
+            document.getElementById("screenAudioValue").textContent = pct + "%";
+            if (screenAudioEl) screenAudioEl.volume = Math.min(1, pct / 100);
+        };
+    }
+    panel.style.display = "flex";
+
+    /* Play screen audio locally so the sharer can hear it */
+    if (!screenAudioEl) {
+        screenAudioEl = document.createElement("audio");
+        screenAudioEl.autoplay = true;
+        screenAudioEl.muted = false;
+        document.body.appendChild(screenAudioEl);
+    }
+    screenAudioEl.srcObject = stream;
+}
+
+function hideScreenAudioPanel() {
+    const panel = document.getElementById("screenAudioPanel");
+    if (panel) panel.style.display = "none";
+    if (screenAudioEl) {
+        screenAudioEl.srcObject = null;
+        screenAudioEl.remove();
+        screenAudioEl = null;
+    }
+}
+
 screenBtn.onclick = async () => {
     if (screenEnabled) {
         screenStream?.getTracks().forEach(t => t.stop());
@@ -572,6 +712,7 @@ screenBtn.onclick = async () => {
         screenEnabled = false;
         setScreenIcon();
         socket.emit("screen-share-state", { sharing: false });
+        hideScreenAudioPanel();
         if (localStream) {
             const camTrack = localStream.getVideoTracks()[0];
             if (camTrack) {
@@ -590,13 +731,31 @@ screenBtn.onclick = async () => {
         screenEnabled = true;
         setScreenIcon();
         socket.emit("screen-share-state", { sharing: true });
-        const screenTrack = screenStream.getVideoTracks()[0];
+
+        const screenTrack     = screenStream.getVideoTracks()[0];
+        const screenAudioTracks = screenStream.getAudioTracks();
+
+        /* Replace video track in all peers */
         for (const [, pc] of Object.entries(peerConnections)) {
-            const s = pc.getSenders().find(s => s.track?.kind === "video");
-            if (s) s.replaceTrack(screenTrack).catch(() => {});
-            else   pc.addTrack(screenTrack, screenStream);
+            const sVideo = pc.getSenders().find(s => s.track?.kind === "video");
+            if (sVideo) sVideo.replaceTrack(screenTrack).catch(() => {});
+            else        pc.addTrack(screenTrack, screenStream);
+
+            /* Add screen audio tracks as additional senders */
+            screenAudioTracks.forEach(at => {
+                if (!pc.getSenders().find(s => s.track === at)) {
+                    pc.addTrack(at, screenStream);
+                }
+            });
         }
+
         showVideoInBox("local", screenStream, true, true);
+
+        /* If screen share includes audio, show volume panel for sharer */
+        if (screenAudioTracks.length > 0) {
+            showScreenAudioPanel(screenStream);
+        }
+
         screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
         if (e.name !== "NotAllowedError") alert("Could not start screen share: " + e.message);
