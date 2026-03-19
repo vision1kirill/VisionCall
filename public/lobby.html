@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VisionCall — Preview</title>
+<title>VisionCall — Предпросмотр</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="lobby-page">
@@ -18,29 +18,29 @@
     </div>
   </div>
 
-  <!-- Camera preview -->
+  <!-- Превью камеры -->
   <div class="lobby-preview" id="lobbyPreview">
     <div class="lobby-preview-off" id="previewOff">
       <div class="big-avatar" id="previewAvatar"></div>
-      <p>Camera is off</p>
+      <p>Камера выключена</p>
     </div>
-    <!-- video injected by JS -->
+    <!-- видео вставляется через JS -->
   </div>
 
-  <!-- Mic / Cam toggle buttons -->
+  <!-- Кнопки микрофона и камеры -->
   <div class="lobby-controls">
 
-    <button class="lobby-ctrl-btn" id="lobbyMicBtn" title="Toggle microphone">
-      <!-- icon set by JS -->
+    <button class="lobby-ctrl-btn" id="lobbyMicBtn" title="Включить микрофон">
+      <!-- иконка задаётся через JS -->
     </button>
 
-    <button class="lobby-ctrl-btn" id="lobbyCamBtn" title="Toggle camera">
-      <!-- icon set by JS -->
+    <button class="lobby-ctrl-btn" id="lobbyCamBtn" title="Включить камеру">
+      <!-- иконка задаётся через JS -->
     </button>
 
   </div>
 
-  <!-- Mic volume meter + gain slider -->
+  <!-- Шкала громкости + слайдер усиления -->
   <div class="mic-meter-section" id="micMeterSection">
 
     <div class="mic-meter-row">
@@ -51,7 +51,7 @@
     </div>
 
     <div class="gain-row">
-      <span class="gain-label">Input volume</span>
+      <span class="gain-label">Громкость входа</span>
       <div class="gain-slider-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="gain-icon"><line x1="4" y1="12" x2="12" y2="12"/><line x1="18" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="3"/></svg>
         <input type="range" id="micGainSlider" min="0" max="200" value="100" step="5">
@@ -59,14 +59,20 @@
       </div>
     </div>
 
+    <!-- Подсказка про наушники — показывается когда микрофон включён -->
+    <div class="earphone-hint" id="earphoneHint" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+      Вы слышите свой голос — так звучите для других. Рекомендуются наушники.
+    </div>
+
   </div>
 
-  <p class="lobby-status" id="lobbyStatus">Set up your camera and microphone before joining.</p>
+  <p class="lobby-status" id="lobbyStatus">Настройте камеру и микрофон перед входом в комнату.</p>
 
-  <!-- Join button -->
+  <!-- Кнопка входа -->
   <button class="lobby-join-btn" id="lobbyJoinBtn">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-    Join Room
+    Войти в комнату
   </button>
 
 </div>

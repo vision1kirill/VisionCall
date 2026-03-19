@@ -328,7 +328,7 @@ async function startCamera(facing) {
         try {
             rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         } catch (e) {
-            alert("No camera/microphone access: " + e.message);
+            alert("Нет доступа к камере/микрофону: " + e.message);
             return;
         }
     }
@@ -358,7 +358,7 @@ async function switchCamera() {
         }
         showVideoInBox("local", localStream, true, false);
     } catch (e) {
-        alert("Could not switch camera: " + e.message);
+        alert("Не удалось переключить камеру: " + e.message);
         facingMode = (facingMode === "user") ? "environment" : "user";
     }
 }
@@ -398,7 +398,7 @@ function showRemoteScreenAudio(id, stream) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
-            <span class="screen-audio-label">Screen audio</span>
+            <span class="screen-audio-label">Звук экрана</span>
             <input type="range" class="screen-audio-slider-remote" min="0" max="200" value="100" step="5">
             <span class="screen-audio-value">100%</span>`;
         box.appendChild(panel);
@@ -450,7 +450,7 @@ function createPeer(id) {
     };
 
     pc.ontrack = e => {
-        const meta = peerMeta[id] || { name: "Participant", avatar: "🙂" };
+        const meta = peerMeta[id] || { name: "Участник", avatar: "🙂" };
         if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
 
         if (e.track.kind === "video") {
@@ -589,7 +589,7 @@ socket.on("screen-share-state", data => {
 function updateLabelIcons(id, micOn, camOn) {
     const label = document.getElementById("label-" + id);
     if (!label) return;
-    const meta = id === "local" ? { name } : (peerMeta[id] || { name: "Participant" });
+    const meta = id === "local" ? { name } : (peerMeta[id] || { name: "Участник" });
     label.innerHTML = makeLabelHTML(meta.name, micOn, camOn);
 }
 function emitMediaState() {
@@ -603,7 +603,7 @@ socket.on("media-state", data => updateLabelIcons(data.from, data.mic, data.cam)
 function setMicIcon() {
     micBtn.innerHTML = micEnabled ? ICONS.micOn : ICONS.micOff;
     micBtn.className = micEnabled ? "btn-active" : "btn-inactive";
-    micBtn.title = micEnabled ? "Mute" : "Unmute";
+    micBtn.title = micEnabled ? "Выключить микрофон" : "Включить микрофон";
 }
 
 micBtn.onclick = async () => {
@@ -626,7 +626,7 @@ micBtn.onclick = async () => {
 function setCamIcon() {
     camBtn.innerHTML = camEnabled ? ICONS.camOn : ICONS.camOff;
     camBtn.className = camEnabled ? "btn-active" : "btn-inactive";
-    camBtn.title = camEnabled ? "Turn off camera" : "Turn on camera";
+    camBtn.title = camEnabled ? "Выключить камеру" : "Включить камеру";
 }
 
 camBtn.onclick = async () => {
@@ -656,7 +656,7 @@ if (flipBtn) {
 function setScreenIcon() {
     screenBtn.innerHTML = screenEnabled ? ICONS.screenOn : ICONS.screenOff;
     screenBtn.className = screenEnabled ? "btn-screen-active" : "";
-    screenBtn.title = screenEnabled ? "Stop sharing" : "Share screen";
+    screenBtn.title = screenEnabled ? "Остановить демонстрацию" : "Демонстрация экрана";
 }
 
 /* ── Screen share audio: local <audio> element for the sharer to hear ── */
@@ -672,7 +672,7 @@ function showScreenAudioPanel(stream) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
-            <span class="screen-audio-label">Screen audio</span>
+            <span class="screen-audio-label">Звук экрана</span>
             <input type="range" id="screenAudioSlider" min="0" max="200" value="100" step="5">
             <span class="screen-audio-value" id="screenAudioValue">100%</span>`;
         document.querySelector(".controls").prepend(panel);
@@ -758,7 +758,7 @@ screenBtn.onclick = async () => {
 
         screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
-        if (e.name !== "NotAllowedError") alert("Could not start screen share: " + e.message);
+        if (e.name !== "NotAllowedError") alert("Не удалось начать демонстрацию: " + e.message);
     }
 };
 
