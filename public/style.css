@@ -808,13 +808,39 @@ video.flip-h { transform: scaleX(-1); }
     border-radius: 10px;
     color: var(--text2);
 }
+.message.message-self {
+    background: rgba(99,102,241,0.12);
+    border-color: rgba(99,102,241,0.22);
+}
 .message .msg-author {
     font-weight: 600;
     color: var(--text);
     margin-bottom: 2px;
     font-size: 12px;
 }
+.message.message-self .msg-author { color: #a5b4fc; }
 .message .msg-text { color: var(--text2); }
+
+/* ── Бейдж непрочитанных сообщений ── */
+#chatBtn { position: relative; }
+.chat-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    line-height: 1;
+}
 
 .chat-input {
     display: flex;
