@@ -84,7 +84,7 @@ io.on("connection", socket => {
     socket.on("join-room", data => {
         const room   = sanitizeRoom(data.room);
         const name   = String(data.name   || "Участник").slice(0, 64);
-        const avatar = String(data.avatar || "po").slice(0, 16);
+        const avatar = String(data.avatar || "ironman").slice(0, 16);
 
         if (!room) { socket.emit("room-error", "Неверный код комнаты"); return; }
 
@@ -124,7 +124,7 @@ io.on("connection", socket => {
             offer:  data.offer,
             from:   socket.id,
             name:   socket.data.name   || "Участник",
-            avatar: socket.data.avatar || "po"
+            avatar: socket.data.avatar || "ironman"
         });
     });
 

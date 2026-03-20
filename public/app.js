@@ -1,7 +1,7 @@
 const params   = new URLSearchParams(window.location.search);
 const room     = params.get("room");
 const name     = params.get("name");
-const avatar   = params.get("avatar") || "po";
+const avatar   = params.get("avatar") || "ironman";
 const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
 const initGain = Math.max(0, Math.min(2, parseInt(params.get("micGain") || "100") / 100));
@@ -560,7 +560,7 @@ function createPeer(id) {
     };
 
     pc.ontrack = e => {
-        const meta = peerMeta[id] || { name: "Участник", avatar: "po" };
+        const meta = peerMeta[id] || { name: "Участник", avatar: "ironman" };
         if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
 
         if (e.track.kind === "video") {
@@ -634,9 +634,9 @@ socket.on("room-users", existingUsers => {
 });
 
 socket.on("user-connected", async data => {
-    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "po" };
+    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "ironman" };
     addParticipant(data.id, data.name);
-    createVideoBox(data.id, data.name, data.avatar || "po");
+    createVideoBox(data.id, data.name, data.avatar || "ironman");
 
     const pc = createPeer(data.id);
 
@@ -684,9 +684,9 @@ socket.on("user-connected", async data => {
 
 socket.on("offer", async data => {
     if (data.name) {
-        peerMeta[data.from] = { name: data.name, avatar: data.avatar || "po" };
+        peerMeta[data.from] = { name: data.name, avatar: data.avatar || "ironman" };
         if (!document.getElementById("box-" + data.from)) {
-            createVideoBox(data.from, data.name, data.avatar || "po");
+            createVideoBox(data.from, data.name, data.avatar || "ironman");
             addParticipant(data.from, data.name);
         } else {
             const label = document.getElementById("label-" + data.from);
