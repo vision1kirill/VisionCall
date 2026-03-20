@@ -92,6 +92,12 @@ const speakingCancels = {};
 /* ── Таймеры speaking-гало (отдельный Map — не засоряем DOM) ── */
 const speakTimers = {};
 
+/* ── Таймеры ICE-рестарта при состоянии "disconnected" ── */
+const reconnectTimers = {};
+
+/* ── Флаг первого подключения (для разграничения connect / reconnect) ── */
+let _joined = false;
+
 /* ── AudioContext ── */
 let audioCtx    = null;
 let micGainNode = null;
@@ -100,8 +106,24 @@ function getAudioCtx() {
     if (!audioCtx || audioCtx.state === "closed") {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    /* Браузер мог приостановить контекст (фоновая вкладка, долгое молчание) */
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
     return audioCtx;
 }
+
+/* Возобновляем AudioContext, если браузер его приостановил.
+   Вызывается при возврате вкладки на передний план и периодически. */
+function ensureAudioCtxRunning() {
+    if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+    }
+}
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") ensureAudioCtxRunning();
+});
+/* Проверяем каждые 30 сек — на случай, если вкладка оставалась видимой,
+   но браузер всё равно заморозил контекст (Chrome, Safari). */
+setInterval(ensureAudioCtxRunning, 30_000);
 
 /* Применяем усиление микрофона из лобби. */
 function buildGainedStream(rawStream, gain) {
@@ -312,6 +334,8 @@ function removeVideoBox(id) {
     if (speakingCancels[id]) { speakingCancels[id](); delete speakingCancels[id]; }
     /* Убираем speaking-таймер */
     if (speakTimers[id]) { clearTimeout(speakTimers[id]); delete speakTimers[id]; }
+    /* Отменяем отложенный ICE-рестарт */
+    if (reconnectTimers[id]) { clearTimeout(reconnectTimers[id]); delete reconnectTimers[id]; }
     /* Убираем audio-only элемент */
     if (peerAudioEls[id]) {
         peerAudioEls[id].srcObject = null;
@@ -375,7 +399,8 @@ function monitorSpeaking(id, stream) {
         speakingCancels[id] = () => {
             cancelled = true;
             cancelAnimationFrame(rafId);
-            try { source.disconnect(); } catch (e) {}
+            try { source.disconnect(); }   catch (e) {}
+            try { analyser.disconnect(); } catch (e) {}
         };
 
         function check() {
@@ -637,8 +662,29 @@ function createPeer(id) {
     };
 
     pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed") pc.restartIce();
-        if (pc.connectionState === "closed") removeVideoBox(id);
+        const state = pc.connectionState;
+
+        if (state === "disconnected") {
+            /* По умолчанию браузер ждёт до 30 сек перед переходом в "failed".
+               Мы не ждём — пробуем рестарт ICE через 5 сек. */
+            if (!reconnectTimers[id]) {
+                reconnectTimers[id] = setTimeout(() => {
+                    delete reconnectTimers[id];
+                    if (peerConnections[id]?.connectionState === "disconnected") {
+                        peerConnections[id].restartIce();
+                    }
+                }, 5_000);
+            }
+        } else {
+            /* Состояние улучшилось — отменяем отложенный рестарт */
+            if (reconnectTimers[id]) {
+                clearTimeout(reconnectTimers[id]);
+                delete reconnectTimers[id];
+            }
+        }
+
+        if (state === "failed") pc.restartIce();
+        if (state === "closed") removeVideoBox(id);
     };
 
     peerConnections[id] = pc;
@@ -659,7 +705,77 @@ async function flushCandidates(id) {
 /* ════════════════════════════════════════════
    SOCKET СОБЫТИЯ
 ════════════════════════════════════════════ */
-socket.emit("join-room", { room, name, avatar });
+
+/* connect срабатывает как при первом подключении, так и при переподключении.
+   При переподключении socket.id меняется — нужно заново войти в комнату
+   и пересобрать все peer connections. */
+socket.on("connect", () => {
+    if (_joined) {
+        /* ── Переподключение после разрыва ── */
+        showToast("Переподключение к комнате…", "info");
+
+        /* Останавливаем демонстрацию экрана (getDisplayMedia нельзя продолжить) */
+        if (screenEnabled) {
+            screenStream?.getTracks().forEach(t => t.stop());
+            screenStream  = null;
+            screenEnabled = false;
+            setScreenIcon();
+            hideScreenAudioPanel();
+            if (screenAudioMix) {
+                try { screenAudioMix.micSrc?.disconnect(); }   catch (e) {}
+                try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
+                try { screenAudioMix.screenGain?.disconnect(); } catch (e) {}
+                screenAudioMix = null;
+            }
+        }
+
+        /* Закрываем все существующие peer connections */
+        Object.values(peerConnections).forEach(pc => { try { pc.close(); } catch (e) {} });
+
+        /* Убираем все чужие видео-боксы и панели */
+        [...document.querySelectorAll(".video-box")].forEach(box => {
+            const id = box.id.replace("box-", "");
+            if (id === "local") return;
+            if (speakingCancels[id]) { speakingCancels[id](); delete speakingCancels[id]; }
+            if (speakTimers[id])     { clearTimeout(speakTimers[id]); delete speakTimers[id]; }
+            if (reconnectTimers[id]) { clearTimeout(reconnectTimers[id]); delete reconnectTimers[id]; }
+            if (peerAudioEls[id])    { peerAudioEls[id].srcObject = null; peerAudioEls[id].remove(); delete peerAudioEls[id]; }
+            removeRemoteScreenAudio(id);
+            box.querySelector(".rsa-viewer-panel")?.remove();
+            box.remove();
+        });
+        /* Убираем чужих участников из сайдбара */
+        [...document.querySelectorAll(".participant")].forEach(p => {
+            if (p.id !== "participant-local") p.remove();
+        });
+
+        /* Сбрасываем всё состояние соединений */
+        Object.keys(peerConnections).forEach(id => delete peerConnections[id]);
+        Object.keys(peerMeta).forEach(id => delete peerMeta[id]);
+        Object.keys(makingOffer).forEach(id => delete makingOffer[id]);
+        Object.keys(pendingCandidates).forEach(id => delete pendingCandidates[id]);
+        roomCreatorId = null;
+        updateGridLayout();
+
+        /* Возобновляем AudioContext — браузер мог заморозить его во время разрыва */
+        ensureAudioCtxRunning();
+
+        /* Повторно отправляем своё состояние микро/камеры через 2 сек
+           (peer connections ещё устанавливаются) */
+        setTimeout(() => emitMediaState(), 2_000);
+    }
+
+    _joined = true;
+    socket.emit("join-room", { room, name, avatar });
+});
+
+/* Уведомляем пользователя о потере соединения */
+socket.on("disconnect", reason => {
+    if (reason !== "io client disconnect") {
+        /* io client disconnect = пользователь сам нажал «Выйти», не показываем тост */
+        showToast("Соединение прервано. Переподключение…", "error");
+    }
+});
 
 /* Комната заполнена */
 socket.on("room-full", () => {
