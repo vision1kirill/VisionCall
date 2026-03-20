@@ -1,579 +1,383 @@
-/* ═══════════════════════════════════════════════════════════════
-   SVG AVATARS — VisionCall  (v2 — accurate character likenesses)
-   viewBox 60×60, flat-vector style optimised for 40–80 px display
-═══════════════════════════════════════════════════════════════ */
-
+// avatars.js v3 — photo-reference accurate SVG avatars
 window.AVATAR_LABELS = {
-    po:          "По (Кунг-фу панда)",
-    jesse:       "Джесси Пинкман",
-    optimus:     "Оптимус Прайм",
-    demogorgon:  "Демогоргон",
-    sasha:       "Саша (Универ)",
-    wednesday:   "Уэнздей",
-    cheburashka: "Чебурашка",
-    ghostface:   "Призрачное лицо",
-    peacemaker:  "Миротворец",
-    vaultboy:    "Волт-бой",
-    mrmonopoly:  "Мистер Монополия",
-    happymeal:   "Хэппи Мил"
+  po:          "По",
+  jesse:       "Джесси",
+  optimus:     "Оптимус",
+  demogorgon:  "Демогоргон",
+  sasha:       "Саша",
+  wednesday:   "Уэнздей",
+  cheburashka: "Чебурашка",
+  ghostface:   "Ghostface",
+  peacemaker:  "Миротворец",
+  vaultboy:    "Волт-бой",
+  mrmonopoly:  "Монополия",
+  happymeal:   "Хэппи Мил",
 };
 
 window.AVATARS = {
 
-/* ─────────────────────────────────────────────────────────────
-   ПО  (Kung Fu Panda)
-   Key: giant panda eye-patches · white face · black round ears
-        · jade-green dragon-warrior robe
-───────────────────────────────────────────────────────────── */
+/* ── 1. ПО (Kung Fu Panda) ──────────────────────────────────────────── */
 po: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Red kung-fu robe -->
-  <path d="M4 62 Q6 46 30 42 Q54 46 56 62Z" fill="#c73e28"/>
-  <path d="M4 46 Q30 40 56 46 L56 51 Q30 45 4 51Z" fill="#9e2e1a"/>
-  <!-- Gold collar trim -->
-  <path d="M20 44 Q30 41 40 44" stroke="#d4a520" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-  <!-- Black ears -->
-  <circle cx="13" cy="13" r="11" fill="#111"/>
-  <circle cx="47" cy="13" r="11" fill="#111"/>
-  <!-- White face -->
-  <circle cx="30" cy="33" r="22" fill="#f5f5f0"/>
-  <!-- Large panda eye-patches (the defining feature) -->
-  <ellipse cx="19" cy="26.5" rx="9.5" ry="8.5" fill="#111"/>
-  <ellipse cx="41" cy="26.5" rx="9.5" ry="8.5" fill="#111"/>
-  <!-- White eye area inside patch -->
-  <circle cx="19" cy="27.5" r="5.5" fill="#f5f5f0"/>
-  <circle cx="41" cy="27.5" r="5.5" fill="#f5f5f0"/>
-  <!-- Pupils -->
-  <circle cx="20" cy="28" r="3.2" fill="#111"/>
-  <circle cx="42" cy="28" r="3.2" fill="#111"/>
-  <!-- Eye shine -->
-  <circle cx="21.4" cy="26.4" r="1.4" fill="#fff"/>
-  <circle cx="43.4" cy="26.4" r="1.4" fill="#fff"/>
-  <!-- Muzzle (slightly lighter circle for nose area) -->
-  <ellipse cx="30" cy="37" rx="7" ry="5.5" fill="#e8e2db"/>
-  <!-- Nose -->
-  <ellipse cx="30" cy="34.8" rx="3.5" ry="2.6" fill="#1a1a1a"/>
-  <ellipse cx="28.7" cy="35.5" rx="1.1" ry="0.8" fill="#111"/>
-  <ellipse cx="31.3" cy="35.5" rx="1.1" ry="0.8" fill="#111"/>
-  <!-- Big happy grin -->
-  <path d="M21 41.5 Q30 49 39 41.5" stroke="#2d2d2d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="30" cy="54" rx="18" ry="10" fill="#1a1a1a"/>
+  <circle cx="12" cy="10" r="8" fill="#1a1a1a"/>
+  <circle cx="12" cy="10" r="5" fill="#242424"/>
+  <circle cx="48" cy="10" r="8" fill="#1a1a1a"/>
+  <circle cx="48" cy="10" r="5" fill="#242424"/>
+  <ellipse cx="30" cy="28" rx="19" ry="20" fill="#f4f3ee"/>
+  <ellipse cx="20" cy="25" rx="10" ry="9" fill="#1a1a1a" transform="rotate(-12,20,25)"/>
+  <ellipse cx="40" cy="25" rx="10" ry="9" fill="#1a1a1a" transform="rotate(12,40,25)"/>
+  <circle cx="20" cy="25" r="5.5" fill="#5c8c22"/>
+  <circle cx="20" cy="25" r="3.5" fill="#3a6010"/>
+  <circle cx="21.8" cy="23.5" r="1.6" fill="white"/>
+  <circle cx="40" cy="25" r="5.5" fill="#5c8c22"/>
+  <circle cx="40" cy="25" r="3.5" fill="#3a6010"/>
+  <circle cx="41.8" cy="23.5" r="1.6" fill="white"/>
+  <ellipse cx="30" cy="33" rx="3.5" ry="2.5" fill="#1a1a1a"/>
+  <path d="M17,39 Q30,50 43,39 L43,43 Q30,53 17,43 Z" fill="white" stroke="#1a1a1a" stroke-width="1.2"/>
+  <line x1="22" y1="39" x2="22" y2="43" stroke="#ccc" stroke-width="1"/>
+  <line x1="26" y1="41" x2="26" y2="45" stroke="#ccc" stroke-width="1"/>
+  <line x1="30" y1="42" x2="30" y2="46" stroke="#ccc" stroke-width="1"/>
+  <line x1="34" y1="41" x2="34" y2="45" stroke="#ccc" stroke-width="1"/>
+  <line x1="38" y1="39" x2="38" y2="43" stroke="#ccc" stroke-width="1"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ДЖЕССИ ПИНКМАН  (Breaking Bad)
-   Key: yellow skull hoodie · backwards cap · light blue eyes
-        · short stubble · pale skin · street-wear attitude
-───────────────────────────────────────────────────────────── */
+/* ── 2. ДЖЕССИ ПИНКМАН ──────────────────────────────────────────────── */
 jesse: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Yellow hoodie body -->
-  <path d="M2 62 Q5 45 30 41 Q55 45 58 62Z" fill="#d97706"/>
-  <!-- Hood pulled up, framing face -->
-  <ellipse cx="30" cy="44" rx="25" ry="9" fill="#d97706"/>
-  <!-- Skull print on chest (simplified but recognisable) -->
-  <ellipse cx="30" cy="53" rx="6" ry="5" fill="#c26e04" opacity="0.85"/>
-  <circle cx="28" cy="51.5" r="1.6" fill="#92400e"/>
-  <circle cx="32" cy="51.5" r="1.6" fill="#92400e"/>
-  <path d="M27 54.5 Q30 56.5 33 54.5" stroke="#92400e" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-  <!-- Backwards cap (dark, brim pointing back) -->
-  <rect x="10" y="13" width="40" height="7" rx="3.5" fill="#222"/>
-  <rect x="8"  y="17" width="44" height="5" rx="2.5" fill="#333"/>
-  <!-- Small logo on cap -->
-  <rect x="26" y="14" width="8" height="3" rx="1" fill="#444"/>
-  <!-- Hair visible under cap (dark, short) -->
-  <rect x="10" y="18" width="40" height="5" rx="3" fill="#3d2b1a"/>
-  <!-- Face (fair, angular) -->
-  <ellipse cx="30" cy="30" rx="17" ry="18" fill="#e8c29a"/>
-  <!-- Jawline shadow / stubble area -->
-  <ellipse cx="30" cy="41" rx="12" ry="5" fill="#d4a876" opacity="0.45"/>
-  <!-- Stubble dots (simplified) -->
-  <circle cx="22" cy="39" r="0.8" fill="#b08060" opacity="0.6"/>
-  <circle cx="26" cy="40.5" r="0.8" fill="#b08060" opacity="0.6"/>
-  <circle cx="30" cy="41" r="0.8" fill="#b08060" opacity="0.6"/>
-  <circle cx="34" cy="40.5" r="0.8" fill="#b08060" opacity="0.6"/>
-  <circle cx="38" cy="39" r="0.8" fill="#b08060" opacity="0.6"/>
-  <!-- Ears -->
-  <ellipse cx="13" cy="30" rx="4" ry="5" fill="#e0b890"/>
-  <ellipse cx="47" cy="30" rx="4" ry="5" fill="#e0b890"/>
-  <!-- Eyebrows (dark, slightly furrowed — troubled look) -->
-  <path d="M18.5 22 Q22.5 20.5 26 21.5" stroke="#3d2b1a" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <path d="M34 21.5 Q37.5 20.5 41.5 22" stroke="#3d2b1a" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <!-- Eyes (light blue-grey — Aaron Paul's eyes) -->
-  <ellipse cx="22.5" cy="27" rx="3.8" ry="4.2" fill="#fff"/>
-  <ellipse cx="37.5" cy="27" rx="3.8" ry="4.2" fill="#fff"/>
-  <circle cx="22.5" cy="27.5" r="2.5" fill="#7ba8c0"/>
-  <circle cx="37.5" cy="27.5" r="2.5" fill="#7ba8c0"/>
-  <circle cx="22.5" cy="27.5" r="1.4" fill="#1a1a1a"/>
-  <circle cx="37.5" cy="27.5" r="1.4" fill="#1a1a1a"/>
-  <circle cx="23.3" cy="26.2" r="0.75" fill="#fff"/>
-  <circle cx="38.3" cy="26.2" r="0.75" fill="#fff"/>
-  <!-- Nose -->
-  <path d="M27.5 32 Q30 35.5 32.5 32" stroke="#c0906a" stroke-width="1.8" fill="none"/>
-  <!-- Characteristic Jesse smirk -->
-  <path d="M24 37 Q27.5 39.5 34 37" stroke="#b07050" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M7,60 L7,40 Q14,31 23,29 L30,34 L37,29 Q46,31 53,40 L53,60 Z" fill="#c0392b"/>
+  <line x1="30" y1="34" x2="30" y2="60" stroke="#a02a20" stroke-width="2"/>
+  <path d="M23,29 Q27,36 30,33 Q33,36 37,29 Q34,25 30,26 Q26,25 23,29 Z" fill="#9a2218"/>
+  <path d="M27,33 L30,37 L33,33 L33,42 L27,42 Z" fill="#1a1a1a"/>
+  <rect x="26" y="27" width="8" height="8" rx="3" fill="#d4a07a"/>
+  <ellipse cx="30" cy="20" rx="13" ry="14" fill="#d4a07a"/>
+  <ellipse cx="30" cy="9" rx="13" ry="6" fill="#1c1c1c"/>
+  <rect x="17" y="8" width="26" height="7" rx="0" fill="#1c1c1c"/>
+  <rect x="17" y="13" width="26" height="4" rx="1" fill="#c0392b"/>
+  <ellipse cx="17" cy="20" rx="3" ry="5" fill="#1a1008"/>
+  <ellipse cx="43" cy="20" rx="3" ry="5" fill="#1a1008"/>
+  <ellipse cx="24" cy="20" rx="3.5" ry="3" fill="white"/>
+  <circle cx="24" cy="20" r="2.2" fill="#6a8aaa"/>
+  <circle cx="24" cy="20" r="1.3" fill="#3a5a7a"/>
+  <circle cx="24.8" cy="19.3" r="0.6" fill="white"/>
+  <ellipse cx="36" cy="20" rx="3.5" ry="3" fill="white"/>
+  <circle cx="36" cy="20" r="2.2" fill="#6a8aaa"/>
+  <circle cx="36" cy="20" r="1.3" fill="#3a5a7a"/>
+  <circle cx="36.8" cy="19.3" r="0.6" fill="white"/>
+  <path d="M21,16 Q24,14.5 27,16" stroke="#1c1008" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M33,16 Q36,14.5 39,16" stroke="#1c1008" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M28.5,24 Q30,26.5 31.5,24" stroke="#b07050" stroke-width="1.2" fill="none"/>
+  <ellipse cx="30" cy="27" rx="9" ry="4" fill="#c08060" opacity="0.32"/>
+  <path d="M26,27 Q30,29.5 34,27" stroke="#8a4828" stroke-width="1.5" fill="none" stroke-linecap="round"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ОПТИМУС ПРАЙМ  (Transformers G1)
-   Key: blue rectangular helmet · red face plate · silver chin-guard
-        · bright blue glowing rectangular eyes · side antennas
-───────────────────────────────────────────────────────────── */
+/* ── 3. ОПТИМУС ПРАЙМ (movie version) ──────────────────────────────── */
 optimus: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Red chest/body at bottom -->
-  <path d="M4 62 Q5 49 30 45 Q55 49 56 62Z" fill="#c62828"/>
-  <!-- Neck (blue) -->
-  <rect x="23" y="43" width="14" height="8" rx="2" fill="#1565c0"/>
-  <!-- Main blue helmet block -->
-  <rect x="8" y="12" width="44" height="34" rx="5" fill="#1565c0"/>
-  <!-- Red forehead crest / upper face panel -->
-  <rect x="8" y="12" width="44" height="17" rx="5" fill="#c62828"/>
-  <!-- Blue overlap to square off bottom of red area -->
-  <rect x="8" y="22" width="44" height="7" fill="#c62828"/>
-  <!-- Silver mouthplate / face guard (lower half) -->
-  <rect x="13" y="29" width="34" height="16" rx="3" fill="#9e9e9e"/>
-  <!-- Grill lines on mouthplate -->
-  <line x1="16" y1="33" x2="44" y2="33" stroke="#bdbdbd" stroke-width="1.3"/>
-  <line x1="16" y1="37" x2="44" y2="37" stroke="#bdbdbd" stroke-width="1.3"/>
-  <line x1="16" y1="41" x2="44" y2="41" stroke="#bdbdbd" stroke-width="1.3"/>
-  <!-- Blue visor band across face -->
-  <rect x="11" y="22" width="38" height="11" rx="2" fill="#0d47a1"/>
-  <!-- Glowing bright-blue eyes (rectangular — G1 style) -->
-  <rect x="15" y="24" width="12" height="7" rx="2" fill="#29b6f6"/>
-  <rect x="33" y="24" width="12" height="7" rx="2" fill="#29b6f6"/>
-  <!-- Inner eye glow (lighter centre) -->
-  <rect x="16" y="25" width="6" height="3" rx="1" fill="#81d4fa" opacity="0.9"/>
-  <rect x="34" y="25" width="6" height="3" rx="1" fill="#81d4fa" opacity="0.9"/>
-  <!-- Left antenna -->
-  <rect x="8"  y="4" width="7" height="12" rx="3" fill="#1565c0"/>
-  <!-- Right antenna -->
-  <rect x="45" y="4" width="7" height="12" rx="3" fill="#1565c0"/>
-  <!-- Autobot symbol on forehead (simplified red/grey shape) -->
-  <polygon points="30,14 33,19 37,19 34.5,22 35.5,27 30,24 24.5,27 25.5,22 23,19 27,19" fill="#e53935" opacity="0.75"/>
+  <rect x="13" y="44" width="14" height="16" rx="2" fill="#1a3a90"/>
+  <rect x="33" y="44" width="14" height="16" rx="2" fill="#1a3a90"/>
+  <rect x="11" y="27" width="38" height="20" rx="3" fill="#c0392b"/>
+  <rect x="3" y="25" width="12" height="14" rx="3" fill="#1a3a90"/>
+  <rect x="45" y="25" width="12" height="14" rx="3" fill="#1a3a90"/>
+  <rect x="15" y="30" width="10" height="8" rx="1.5" fill="#4a7acc" opacity="0.85"/>
+  <rect x="35" y="30" width="10" height="8" rx="1.5" fill="#4a7acc" opacity="0.85"/>
+  <line x1="16" y1="33" x2="25" y2="33" stroke="#7aaae8" stroke-width="0.8"/>
+  <line x1="36" y1="33" x2="45" y2="33" stroke="#7aaae8" stroke-width="0.8"/>
+  <polygon points="27,28 30,23 33,28" fill="#e04050"/>
+  <rect x="16" y="7" width="28" height="22" rx="5" fill="#1a3a90"/>
+  <rect x="18" y="11" width="24" height="16" rx="2" fill="#b0b8c8"/>
+  <rect x="25" y="7" width="10" height="6" rx="1.5" fill="#c0392b"/>
+  <rect x="20" y="14" width="8" height="5" rx="1" fill="#00bbff"/>
+  <rect x="32" y="14" width="8" height="5" rx="1" fill="#00bbff"/>
+  <rect x="21" y="15" width="6" height="3" rx="0.5" fill="white" opacity="0.45"/>
+  <rect x="33" y="15" width="6" height="3" rx="0.5" fill="white" opacity="0.45"/>
+  <rect x="19" y="21" width="22" height="5" rx="1" fill="#7a8898"/>
+  <line x1="23" y1="21" x2="23" y2="26" stroke="#9ab0c0" stroke-width="0.8"/>
+  <line x1="27" y1="21" x2="27" y2="26" stroke="#9ab0c0" stroke-width="0.8"/>
+  <line x1="30.5" y1="21" x2="30.5" y2="26" stroke="#9ab0c0" stroke-width="0.8"/>
+  <line x1="34" y1="21" x2="34" y2="26" stroke="#9ab0c0" stroke-width="0.8"/>
+  <line x1="38" y1="21" x2="38" y2="26" stroke="#9ab0c0" stroke-width="0.8"/>
+  <line x1="20" y1="7" x2="15" y2="1" stroke="#9098a8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="40" y1="7" x2="45" y2="1" stroke="#9098a8" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M12,38 Q18,33 24,37" stroke="#ff7020" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <path d="M36,37 Q42,33 48,38" stroke="#ff7020" stroke-width="1.5" fill="none" opacity="0.7"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ДЕМОГОРГОН  (Stranger Things)
-   Key: NO eyes or nose — entirely defined by the flower-petal
-        mouth with concentric rings of inward-pointing teeth
-        on a dark, sinewy, eyeless skull-like body
-───────────────────────────────────────────────────────────── */
+/* ── 4. ДЕМОГОРГОН ──────────────────────────────────────────────────── */
 demogorgon: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Dark body / background -->
-  <circle cx="30" cy="30" r="30" fill="#0e0804"/>
-  <!-- 8 flesh petals radiating outward (the opened flower-face) -->
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(0   30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(45  30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(90  30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(135 30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(180 30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(225 30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(270 30 30)"/>
-  <ellipse cx="30" cy="9"  rx="6.5" ry="12" fill="#3d1a0a" transform="rotate(315 30 30)"/>
-  <!-- Petal vein lines -->
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(0   30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(45  30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(90  30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(135 30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(180 30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(225 30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(270 30 30)" opacity="0.7"/>
-  <line x1="30" y1="10" x2="30" y2="19" stroke="#1a0805" stroke-width="1.2" transform="rotate(315 30 30)" opacity="0.7"/>
-  <!-- Outer fleshy ring -->
-  <circle cx="30" cy="30" r="17" fill="#5a200a"/>
-  <!-- Outer ring of 8 teeth (pointing inward) -->
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(0   30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(45  30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(90  30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(135 30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(180 30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(225 30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(270 30 30)"/>
-  <polygon points="30,13 27.5,19 32.5,19" fill="#ddd9c4" transform="rotate(315 30 30)"/>
-  <!-- Inner gum ring -->
-  <circle cx="30" cy="30" r="11" fill="#7a2a0a"/>
-  <!-- Inner ring of 8 smaller teeth -->
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(0   30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(45  30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(90  30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(135 30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(180 30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(225 30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(270 30 30)"/>
-  <polygon points="30,19 28.5,24 31.5,24" fill="#ddd9c4" transform="rotate(315 30 30)"/>
-  <!-- Deepest void -->
-  <circle cx="30" cy="30" r="7" fill="#030101"/>
+  <rect x="22" y="48" width="16" height="14" rx="6" fill="#9a7060"/>
+  <g>
+    <ellipse cx="30" cy="10" rx="8" ry="14" fill="#c09070"/>
+    <line x1="30" y1="28" x2="30" y2="3" stroke="#8a5a40" stroke-width="1" opacity="0.7"/>
+    <line x1="27" y1="27" x2="26" y2="5" stroke="#8a5a40" stroke-width="0.6" opacity="0.5"/>
+    <line x1="33" y1="27" x2="34" y2="5" stroke="#8a5a40" stroke-width="0.6" opacity="0.5"/>
+  </g>
+  <g transform="rotate(60,30,30)">
+    <ellipse cx="30" cy="10" rx="8" ry="14" fill="#b08060"/>
+    <line x1="30" y1="28" x2="30" y2="3" stroke="#8a5a40" stroke-width="1" opacity="0.7"/>
+  </g>
+  <g transform="rotate(120,30,30)">
+    <ellipse cx="30" cy="10" rx="8" ry="14" fill="#c09070"/>
+    <line x1="30" y1="28" x2="30" y2="3" stroke="#8a5a40" stroke-width="1" opacity="0.7"/>
+  </g>
+  <g transform="rotate(180,30,30)">
+    <ellipse cx="30" cy="10" rx="8" ry="14" fill="#b08060"/>
+    <line x1="30" y1="28" x2="30" y2="3" stroke="#8a5a40" stroke-width="1" opacity="0.7"/>
+  </g>
+  <g transform="rotate(240,30,30)">
+    <ellipse cx="30" cy="10" rx="8" ry="14" fill="#c09070"/>
+    <line x1="30" y1="28" x2="30" y2="3" stroke="#8a5a40" stroke-width="1" opacity="0.7"/>
+  </g>
+  <g transform="rotate(300,30,30)">
+    <ellipse cx="30" cy="10" rx="8" ry="14" fill="#b08060"/>
+    <line x1="30" y1="28" x2="30" y2="3" stroke="#8a5a40" stroke-width="1" opacity="0.7"/>
+  </g>
+  <circle cx="30" cy="30" r="14" fill="#1a0a05"/>
+  <g fill="#f0e8d0" stroke="#c0a898" stroke-width="0.5">
+    <polygon points="30,16 27,21 33,21"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(45,30,30)"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(90,30,30)"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(135,30,30)"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(180,30,30)"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(225,30,30)"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(270,30,30)"/>
+    <polygon points="30,16 27,21 33,21" transform="rotate(315,30,30)"/>
+  </g>
+  <circle cx="30" cy="30" r="9" fill="#0d0503"/>
+  <g fill="#e8dfc8" stroke="#b0a080" stroke-width="0.4">
+    <polygon points="30,21 28,25 32,25"/>
+    <polygon points="30,21 28,25 32,25" transform="rotate(60,30,30)"/>
+    <polygon points="30,21 28,25 32,25" transform="rotate(120,30,30)"/>
+    <polygon points="30,21 28,25 32,25" transform="rotate(180,30,30)"/>
+    <polygon points="30,21 28,25 32,25" transform="rotate(240,30,30)"/>
+    <polygon points="30,21 28,25 32,25" transform="rotate(300,30,30)"/>
+  </g>
+  <circle cx="30" cy="30" r="5" fill="#030100"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   САША  (Универ / Jenna-Ortega's Wednesday)
-   Key: very prominent THICK dark glasses · dark hair ·
-        friendly student face · blue sweater
-───────────────────────────────────────────────────────────── */
+/* ── 5. САША (Андрей Гайдулян) — без очков ─────────────────────────── */
 sasha: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Blue student sweater -->
-  <path d="M4 62 Q7 45 30 42 Q53 45 56 62Z" fill="#2563eb"/>
-  <!-- Neck -->
-  <rect x="25" y="38" width="10" height="8" fill="#fde0b8"/>
-  <!-- Ears -->
-  <ellipse cx="12" cy="30" rx="5" ry="6" fill="#fde0b8"/>
-  <ellipse cx="48" cy="30" rx="5" ry="6" fill="#fde0b8"/>
-  <!-- Face -->
-  <ellipse cx="30" cy="28" rx="18" ry="20" fill="#fde0b8"/>
-  <!-- Dark hair — slightly messy student style -->
-  <path d="M12 20 Q30 9 48 20 L48 26 Q40 18 30 22 Q20 18 12 26Z" fill="#2d1a0a"/>
-  <rect x="12" y="18" width="36" height="9" fill="#2d1a0a"/>
-  <ellipse cx="12" cy="23" rx="5.5" ry="8" fill="#2d1a0a"/>
-  <ellipse cx="48" cy="23" rx="5.5" ry="8" fill="#2d1a0a"/>
-  <!-- THICK DARK GLASSES — the signature feature (very prominent frames) -->
-  <!-- Left lens outer frame -->
-  <rect x="9"  y="24" width="18" height="13" rx="4.5" fill="#1a1a1a"/>
-  <!-- Left lens glass -->
-  <rect x="11" y="26" width="14" height="9"  rx="3"   fill="#d0e0f8" opacity="0.35"/>
-  <!-- Right lens outer frame -->
-  <rect x="33" y="24" width="18" height="13" rx="4.5" fill="#1a1a1a"/>
-  <!-- Right lens glass -->
-  <rect x="35" y="26" width="14" height="9"  rx="3"   fill="#d0e0f8" opacity="0.35"/>
-  <!-- Nose bridge -->
-  <rect x="27" y="28" width="6" height="3" rx="1.5" fill="#1a1a1a"/>
-  <!-- Temple arms -->
-  <line x1="9"  y1="29" x2="4"  y2="28" stroke="#1a1a1a" stroke-width="2.8" stroke-linecap="round"/>
-  <line x1="51" y1="29" x2="56" y2="28" stroke="#1a1a1a" stroke-width="2.8" stroke-linecap="round"/>
-  <!-- Eyes behind glasses -->
-  <circle cx="18" cy="30.5" r="3.5" fill="#5c3a18"/>
-  <circle cx="42" cy="30.5" r="3.5" fill="#5c3a18"/>
-  <circle cx="18" cy="30.5" r="2"   fill="#1a0d06"/>
-  <circle cx="42" cy="30.5" r="2"   fill="#1a0d06"/>
-  <circle cx="19" cy="29.3" r="1"   fill="#fff"/>
-  <circle cx="43" cy="29.3" r="1"   fill="#fff"/>
-  <!-- Nose -->
-  <path d="M28 37 Q30 40 32 37" stroke="#c8896b" stroke-width="1.6" fill="none"/>
-  <!-- Warm goofy smile -->
-  <path d="M22 42 Q30 48 38 42" stroke="#c08060" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <path d="M6,60 L6,42 Q14,32 23,30 L30,35 L37,30 Q46,32 54,42 L54,60 Z" fill="#1a1a1a"/>
+  <path d="M23,30 L27,37 L30,34 L33,37 L37,30 L34,25 Q30,27 26,25 Z" fill="#2d2d2d"/>
+  <rect x="26" y="30" width="8" height="8" fill="#0a0a0a"/>
+  <rect x="25" y="26" width="10" height="8" rx="3" fill="#d4a877"/>
+  <ellipse cx="30" cy="19" rx="16" ry="17" fill="#d4a877"/>
+  <ellipse cx="30" cy="7" rx="15" ry="7" fill="#7a3e28"/>
+  <path d="M15,14 Q14,3 22,3 Q26,1 30,2 Q34,1 38,3 Q46,3 45,14" fill="#7a3e28"/>
+  <path d="M17,10 Q20,5 24,7" stroke="#5a2a14" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M26,3 Q28,1 30,3" stroke="#5a2a14" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M32,2 Q35,0 38,4" stroke="#5a2a14" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <path d="M39,6 Q43,5 44,10" stroke="#5a2a14" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <ellipse cx="14" cy="20" rx="3.5" ry="6" fill="#7a3e28"/>
+  <ellipse cx="46" cy="20" rx="3.5" ry="6" fill="#7a3e28"/>
+  <ellipse cx="23" cy="20" rx="4" ry="3.5" fill="white"/>
+  <circle cx="23" cy="20" r="2.5" fill="#6a7a38"/>
+  <circle cx="23" cy="20" r="1.5" fill="#3a4a18"/>
+  <circle cx="24" cy="19.2" r="0.7" fill="white"/>
+  <ellipse cx="37" cy="20" rx="4" ry="3.5" fill="white"/>
+  <circle cx="37" cy="20" r="2.5" fill="#6a7a38"/>
+  <circle cx="37" cy="20" r="1.5" fill="#3a4a18"/>
+  <circle cx="38" cy="19.2" r="0.7" fill="white"/>
+  <path d="M19,16 Q23,14.5 27,16" stroke="#5a3018" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M33,16 Q37,14.5 41,16" stroke="#5a3018" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <ellipse cx="30" cy="25" rx="3" ry="2" fill="#c09060"/>
+  <path d="M27.5,25 Q30,27.5 32.5,25" stroke="#a07040" stroke-width="1" fill="none"/>
+  <path d="M24,29 Q30,34 36,29" stroke="#9a6040" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <circle cx="18" cy="26" r="4.5" fill="#e8a080" opacity="0.22"/>
+  <circle cx="42" cy="26" r="4.5" fill="#e8a080" opacity="0.22"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   УЭНЗДЕЙ  (Wednesday — Netflix)
-   Key: porcelain pale skin · jet-black center-parted double
-        braids · white lace collar · black dress · flat deadpan
-        expression · large dark heavy-lidded eyes
-───────────────────────────────────────────────────────────── */
+/* ── 6. УЭНЗДЕЙ ──────────────────────────────────────────────────────── */
 wednesday: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Black dress -->
-  <path d="M4 62 Q7 46 30 43 Q53 46 56 62Z" fill="#0d0d0d"/>
-  <!-- White lace collar (Peter Pan collar style) -->
-  <path d="M17 46 Q30 41 43 46 L41 51 Q30 47 19 51Z" fill="#f0f0f0"/>
-  <!-- Lace collar detail -->
-  <path d="M17 46 Q30 41 43 46" stroke="#ddd" stroke-width="1.2" fill="none" stroke-dasharray="3,2"/>
-  <!-- Neck -->
-  <rect x="25.5" y="39" width="9" height="8" fill="#f0ede6"/>
-  <!-- Ears -->
-  <ellipse cx="12" cy="30" rx="4.5" ry="5.5" fill="#f0ede6"/>
-  <ellipse cx="48" cy="30" rx="4.5" ry="5.5" fill="#f0ede6"/>
-  <!-- Face — porcelain pale -->
-  <ellipse cx="30" cy="28" rx="17" ry="20" fill="#f0ede6"/>
-  <!-- Hair: black, center-parted, going straight down into braids -->
-  <path d="M13 19 Q30 8 47 19 L47 25 Q38 18 30 22 Q22 18 13 25Z" fill="#0d0d0d"/>
-  <!-- Left braid column -->
-  <rect x="10" y="23" width="7.5" height="28" rx="3.8" fill="#0d0d0d"/>
-  <!-- Braid cross-hatching left -->
-  <line x1="10.5" y1="28" x2="17" y2="28" stroke="#222" stroke-width="2"/>
-  <line x1="10.5" y1="33" x2="17" y2="33" stroke="#222" stroke-width="2"/>
-  <line x1="10.5" y1="38" x2="17" y2="38" stroke="#222" stroke-width="2"/>
-  <line x1="10.5" y1="43" x2="17" y2="43" stroke="#222" stroke-width="2"/>
-  <!-- Right braid column -->
-  <rect x="42.5" y="23" width="7.5" height="28" rx="3.8" fill="#0d0d0d"/>
-  <!-- Braid cross-hatching right -->
-  <line x1="43" y1="28" x2="49.5" y2="28" stroke="#222" stroke-width="2"/>
-  <line x1="43" y1="33" x2="49.5" y2="33" stroke="#222" stroke-width="2"/>
-  <line x1="43" y1="38" x2="49.5" y2="38" stroke="#222" stroke-width="2"/>
-  <line x1="43" y1="43" x2="49.5" y2="43" stroke="#222" stroke-width="2"/>
-  <!-- Eyebrows: thin, very straight, slightly elevated — the signature Wednesday look -->
-  <line x1="17" y1="21" x2="27" y2="21" stroke="#0d0d0d" stroke-width="2.3" stroke-linecap="round"/>
-  <line x1="33" y1="21" x2="43" y2="21" stroke="#0d0d0d" stroke-width="2.3" stroke-linecap="round"/>
-  <!-- Large dark heavy-lidded eyes -->
-  <ellipse cx="22" cy="27.5" rx="5"   ry="5.5"  fill="#fff"/>
-  <ellipse cx="38" cy="27.5" rx="5"   ry="5.5"  fill="#fff"/>
-  <!-- Dark irises -->
-  <circle  cx="22" cy="28"   r="4"              fill="#1a0d0d"/>
-  <circle  cx="38" cy="28"   r="4"              fill="#1a0d0d"/>
-  <circle  cx="22" cy="28"   r="2.4"            fill="#0d0d0d"/>
-  <circle  cx="38" cy="28"   r="2.4"            fill="#0d0d0d"/>
-  <!-- Eye shine -->
-  <circle  cx="22.9" cy="26.3" r="1.1"          fill="#fff"/>
-  <circle  cx="38.9" cy="26.3" r="1.1"          fill="#fff"/>
-  <!-- Nose (small, delicate) -->
-  <path d="M28.5 34 Q30 36.5 31.5 34" stroke="#ccc5ba" stroke-width="1.4" fill="none"/>
-  <!-- DEADPAN flat mouth — no emotion -->
-  <line x1="25" y1="38.5" x2="35" y2="38.5" stroke="#c0b8ae" stroke-width="1.9" stroke-linecap="round"/>
+  <path d="M9,60 L9,40 Q17,31 24,29 L30,32 L36,29 Q43,31 51,40 L51,60 Z" fill="#0d0d0d"/>
+  <path d="M22,29 Q16,33 18,40 L26,36 Q24,33 25,30 Z" fill="white"/>
+  <path d="M38,29 Q44,33 42,40 L34,36 Q36,33 35,30 Z" fill="white"/>
+  <path d="M25,30 Q27,34 30,32 Q33,34 35,30 Q32,27 30,28 Q28,27 25,30 Z" fill="white"/>
+  <rect x="26" y="26" width="8" height="7" rx="2" fill="#f0ede6"/>
+  <ellipse cx="30" cy="19" rx="14" ry="15" fill="#f0ede6"/>
+  <rect x="12" y="12" width="7" height="36" rx="3.5" fill="#080808"/>
+  <line x1="12" y1="17" x2="19" y2="20" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="12" y1="22" x2="19" y2="25" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="12" y1="27" x2="19" y2="30" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="12" y1="32" x2="19" y2="35" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="12" y1="37" x2="19" y2="40" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="12" y1="42" x2="19" y2="45" stroke="#1e1e1e" stroke-width="1.3"/>
+  <rect x="41" y="12" width="7" height="36" rx="3.5" fill="#080808"/>
+  <line x1="41" y1="17" x2="48" y2="20" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="41" y1="22" x2="48" y2="25" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="41" y1="27" x2="48" y2="30" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="41" y1="32" x2="48" y2="35" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="41" y1="37" x2="48" y2="40" stroke="#1e1e1e" stroke-width="1.3"/>
+  <line x1="41" y1="42" x2="48" y2="45" stroke="#1e1e1e" stroke-width="1.3"/>
+  <path d="M16,15 Q20,5 30,6 Q40,5 44,15 L40,12 Q36,7 30,7 Q24,7 20,12 Z" fill="#080808"/>
+  <ellipse cx="23" cy="19" rx="4.5" ry="5" fill="#1a1a28"/>
+  <circle cx="23" cy="19" r="3.2" fill="#0d0d1a"/>
+  <circle cx="24.2" cy="17.8" r="1.1" fill="white" opacity="0.65"/>
+  <ellipse cx="37" cy="19" rx="4.5" ry="5" fill="#1a1a28"/>
+  <circle cx="37" cy="19" r="3.2" fill="#0d0d1a"/>
+  <circle cx="38.2" cy="17.8" r="1.1" fill="white" opacity="0.65"/>
+  <line x1="19" y1="13.5" x2="28" y2="13.5" stroke="#080808" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="32" y1="13.5" x2="41" y2="13.5" stroke="#080808" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M28.5,23 Q30,25 31.5,23" stroke="#c0b8c0" stroke-width="1" fill="none"/>
+  <line x1="25" y1="27" x2="35" y2="27" stroke="#9a8890" stroke-width="1.6" stroke-linecap="round"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ЧЕБУРАШКА  (Soviet cartoon)
-   Key: ENORMOUS round ears on the sides (as big as the head) ·
-        huge black eyes with big white reflections · warm medium-
-        brown fur · lighter muzzle area · tiny gentle mouth
-───────────────────────────────────────────────────────────── */
+/* ── 7. ЧЕБУРАШКА ───────────────────────────────────────────────────── */
 cheburashka: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Body / torso suggestion -->
-  <ellipse cx="30" cy="57" rx="15" ry="8" fill="#c47a3a"/>
-  <!-- HUGE ears — the defining feature (large circles on sides) -->
-  <!-- Left ear outer -->
-  <circle cx="7"  cy="27" r="13" fill="#c47a3a"/>
-  <circle cx="7"  cy="27" r="9"  fill="#da9050"/>
-  <circle cx="7"  cy="27" r="5"  fill="#c47a3a"/>
-  <!-- Right ear outer -->
-  <circle cx="53" cy="27" r="13" fill="#c47a3a"/>
-  <circle cx="53" cy="27" r="9"  fill="#da9050"/>
-  <circle cx="53" cy="27" r="5"  fill="#c47a3a"/>
-  <!-- Head (round) -->
-  <circle cx="30" cy="30" r="21" fill="#c47a3a"/>
-  <!-- Lighter face/muzzle zone -->
-  <ellipse cx="30" cy="35" rx="14" ry="11" fill="#da9050"/>
-  <!-- HUGE eyes (dominant feature — nearly 1/3 of face width each) -->
-  <!-- Left eye whites -->
-  <circle cx="19.5" cy="25.5" r="10.5" fill="#fff"/>
-  <!-- Left iris -->
-  <circle cx="19.5" cy="26"   r="7"    fill="#1a0d06"/>
-  <!-- Left pupil -->
-  <circle cx="19.5" cy="26"   r="4"    fill="#0a0603"/>
-  <!-- Left eye shine (large — key to Cheburashka's cuteness) -->
-  <circle cx="17.5" cy="23"   r="3"    fill="#fff"/>
-  <!-- Right eye whites -->
-  <circle cx="40.5" cy="25.5" r="10.5" fill="#fff"/>
-  <circle cx="40.5" cy="26"   r="7"    fill="#1a0d06"/>
-  <circle cx="40.5" cy="26"   r="4"    fill="#0a0603"/>
-  <circle cx="38.5" cy="23"   r="3"    fill="#fff"/>
-  <!-- Nose (small button) -->
-  <ellipse cx="30" cy="33" rx="3" ry="2.5" fill="#7b3a12"/>
-  <!-- Tiny gentle smile -->
-  <path d="M25 38.5 Q30 43 35 38.5" stroke="#7b3a12" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <ellipse cx="30" cy="55" rx="13" ry="9" fill="#3e2208"/>
+  <circle cx="5" cy="28" r="14" fill="#2e1806"/>
+  <circle cx="5" cy="28" r="12" fill="#4e3010"/>
+  <circle cx="5" cy="28" r="8" fill="#603820"/>
+  <circle cx="55" cy="28" r="14" fill="#2e1806"/>
+  <circle cx="55" cy="28" r="12" fill="#4e3010"/>
+  <circle cx="55" cy="28" r="8" fill="#603820"/>
+  <circle cx="30" cy="27" r="18" fill="#d0a86e"/>
+  <circle cx="30" cy="27" r="18" fill="none" stroke="#b89050" stroke-width="2" opacity="0.25"/>
+  <circle cx="21" cy="25" r="8" fill="#0d0d0d"/>
+  <circle cx="21" cy="25" r="6.5" fill="#060606"/>
+  <circle cx="18" cy="22" r="3.2" fill="white"/>
+  <circle cx="19.5" cy="23.5" r="1.5" fill="white"/>
+  <circle cx="39" cy="25" r="8" fill="#0d0d0d"/>
+  <circle cx="39" cy="25" r="6.5" fill="#060606"/>
+  <circle cx="36" cy="22" r="3.2" fill="white"/>
+  <circle cx="37.5" cy="23.5" r="1.5" fill="white"/>
+  <polygon points="30,33 27.5,38 32.5,38" fill="#1a0e05"/>
+  <circle cx="30" cy="41" r="2.5" fill="#bf3020"/>
+  <circle cx="20" cy="34" r="1.2" fill="#7a4a18" opacity="0.6"/>
+  <circle cx="40" cy="34" r="1.2" fill="#7a4a18" opacity="0.6"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ПРИЗРАЧНОЕ ЛИЦО / GHOSTFACE  (Scream)
-   Key: iconic white elongated ghost/teardrop mask · two black
-        almond eye-holes · open screaming O-shaped mouth ·
-        billowing black hood / robe
-───────────────────────────────────────────────────────────── */
+/* ── 8. GHOSTFACE ───────────────────────────────────────────────────── */
 ghostface: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Black robe / hood filling canvas -->
-  <circle cx="30" cy="30" r="30" fill="#111"/>
-  <ellipse cx="30" cy="18" rx="28" ry="26" fill="#0d0d0d"/>
-  <!-- THE MASK — elongated teardrop ghost shape (Edvard Munch inspired) -->
-  <path d="M30 4
-           Q43 6  46 21
-           Q49 35 43 45
-           Q39 54 30 57
-           Q21 54 17 45
-           Q11 35 14 21
-           Q17 6  30 4Z" fill="#f4f4f0"/>
-  <!-- Mask surface texture / highlight -->
-  <path d="M30 5 Q39 8 42 18" stroke="#e0e0dc" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.6"/>
-  <!-- Shadow on right side -->
-  <path d="M43 24 Q46 32 43 44" stroke="#ddd" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.15"/>
-  <!-- Left eye-hole (black oval, slightly tilted) -->
-  <ellipse cx="22.5" cy="23" rx="5.5" ry="7.5" fill="#0d0d0d"/>
-  <!-- Right eye-hole -->
-  <ellipse cx="37.5" cy="23" rx="5.5" ry="7.5" fill="#0d0d0d"/>
-  <!-- Nose area (subtle shadow — mask has no nose-hole) -->
-  <ellipse cx="30" cy="34" rx="3.5" ry="5" fill="#e8e8e4" opacity="0.5"/>
-  <!-- SCREAMING MOUTH — wide open, inspired by The Scream painting -->
-  <path d="M21 41
-           Q24 37.5 27.5 39.5
-           Q29 36.5 30.5 39.5
-           Q34 37.5 39 41
-           Q38 49 30 52
-           Q22 49 21 41Z" fill="#0d0d0d"/>
+  <rect x="0" y="0" width="60" height="60" fill="#111"/>
+  <path d="M0,0 L60,0 L60,28 Q50,16 40,21 Q35,11 30,9 Q25,11 20,21 Q10,16 0,28 Z" fill="#1e1e1e"/>
+  <path d="M30,4
+    C18,4 11,13 11,23
+    C11,34 16,44 20,50
+    C23,55 27,57 30,57
+    C33,57 37,55 40,50
+    C44,44 49,34 49,23
+    C49,13 42,4 30,4 Z" fill="#f2f0eb"/>
+  <path d="M17,11 Q22,7 27,9 Q22,14 17,11 Z" fill="white" opacity="0.45"/>
+  <ellipse cx="22" cy="23" rx="6.5" ry="7.5" fill="#0a0a0a"/>
+  <ellipse cx="38" cy="23" rx="6.5" ry="7.5" fill="#0a0a0a"/>
+  <path d="M26,31 Q30,34 34,31" stroke="#d8d5cf" stroke-width="1" fill="none"/>
+  <ellipse cx="30" cy="47" rx="9" ry="7" fill="#0a0a0a"/>
+  <ellipse cx="30" cy="47.5" rx="7" ry="5.5" fill="#050505"/>
+  <path d="M11,23 Q11,11 30,4 Q49,11 49,23" fill="none" stroke="white" stroke-width="0.7" opacity="0.35"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   МИРОТВОРЕЦ  (Peacemaker — HBO)
-   Key: COMICALLY OVERSIZED chrome dome helmet · white peace
-        symbol (dove / circle-and-lines) on front · red suit ·
-        strong jaw barely visible below the dome
-───────────────────────────────────────────────────────────── */
+/* ── 9. МИРОТВОРЕЦ ──────────────────────────────────────────────────── */
 peacemaker: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Red suit at bottom -->
-  <path d="M4 62 Q7 49 30 47 Q53 49 56 62Z" fill="#c62828"/>
-  <!-- White stripes on suit (DC costume detail) -->
-  <path d="M4 53 Q7 51 30 50 Q53 51 56 53 L56 56 Q53 54 30 53 Q7 54 4 56Z" fill="#fff" opacity="0.5"/>
-  <!-- Skin at jaw / chin (barely visible below helmet) -->
-  <ellipse cx="30" cy="48" rx="11" ry="5" fill="#d4a574"/>
-  <!-- THE HELMET — large chrome dome (the main visual) -->
-  <ellipse cx="30" cy="25" rx="26" ry="30" fill="#bdbdbd"/>
-  <!-- Chrome sheen highlights -->
-  <ellipse cx="21" cy="12" rx="9" ry="5.5" fill="#e8e8e8" opacity="0.75" transform="rotate(-25 21 12)"/>
-  <ellipse cx="17" cy="18" rx="5" ry="3"   fill="#f5f5f5" opacity="0.55" transform="rotate(-30 17 18)"/>
-  <!-- Bottom shadow of helmet -->
-  <ellipse cx="30" cy="52" rx="24" ry="4"  fill="#9e9e9e" opacity="0.35"/>
-  <!-- Helmet visor / eye slot -->
-  <rect x="12" y="27" width="36" height="12" rx="4" fill="#263238"/>
-  <!-- Visor glow -->
-  <rect x="14" y="29" width="14" height="8" rx="2.5" fill="#1565c0" opacity="0.7"/>
-  <rect x="32" y="29" width="14" height="8" rx="2.5" fill="#1565c0" opacity="0.7"/>
-  <!-- ★ PEACE SYMBOL — the single most recognisable Peacemaker element ★ -->
-  <!-- Peace symbol circle -->
-  <circle cx="30" cy="15" r="10" fill="none" stroke="#f5f5f5" stroke-width="2.5"/>
-  <!-- Vertical stem -->
-  <line x1="30" y1="5"  x2="30" y2="25" stroke="#f5f5f5" stroke-width="2.5" stroke-linecap="round"/>
-  <!-- Left branch (Y fork — left diagonal) -->
-  <line x1="30" y1="25" x2="22.9" y2="20" stroke="#f5f5f5" stroke-width="2.5" stroke-linecap="round"/>
-  <!-- Right branch (Y fork — right diagonal) -->
-  <line x1="30" y1="25" x2="37.1" y2="20" stroke="#f5f5f5" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="14" y="47" width="13" height="13" rx="2" fill="#1a4a9a"/>
+  <rect x="33" y="47" width="13" height="13" rx="2" fill="#1a4a9a"/>
+  <rect x="11" y="30" width="38" height="20" rx="3" fill="#c0392b"/>
+  <rect x="3" y="27" width="13" height="14" rx="3" fill="#1a4a9a"/>
+  <rect x="44" y="27" width="13" height="14" rx="3" fill="#1a4a9a"/>
+  <circle cx="30" cy="40" r="8" fill="none" stroke="#f0c020" stroke-width="2.5"/>
+  <line x1="30" y1="32" x2="30" y2="48" stroke="#f0c020" stroke-width="2.5"/>
+  <line x1="30" y1="40" x2="24" y2="45" stroke="#f0c020" stroke-width="2.5"/>
+  <line x1="30" y1="40" x2="36" y2="45" stroke="#f0c020" stroke-width="2.5"/>
+  <rect x="25" y="25" width="10" height="8" rx="2" fill="#d0a070"/>
+  <ellipse cx="30" cy="16" rx="20" ry="22" fill="#c4ccd8"/>
+  <ellipse cx="22" cy="8" rx="8" ry="6" fill="white" opacity="0.32"/>
+  <rect x="11" y="17" width="38" height="10" rx="2" fill="#0c1a2a"/>
+  <rect x="12" y="18" width="36" height="8" rx="1.5" fill="#1a3a6a" opacity="0.7"/>
+  <rect x="13" y="19" width="15" height="3" rx="1" fill="white" opacity="0.14"/>
+  <rect x="11" y="25" width="38" height="4" rx="2" fill="#9098a8"/>
+  <path d="M13,13 Q30,5 47,13" stroke="#a0aac0" stroke-width="1.5" fill="none"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ВОЛТ-БОЙ  (Fallout)
-   Key: 1950s retro cartoon style · golden blonde hair combed
-        to side · blue vault suit (Vault 101) with yellow stripe
-        · enormous white-teeth grin · big round blue eyes ·
-        thumbs-up hand gesture
-───────────────────────────────────────────────────────────── */
+/* ── 10. ВОЛТ-БОЙ ───────────────────────────────────────────────────── */
 vaultboy: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Blue vault jumpsuit body -->
-  <path d="M4 62 Q7 44 30 41 Q53 44 56 62Z" fill="#1a5276"/>
-  <!-- Yellow horizontal stripe on suit (signature Vault-Tec detail) -->
-  <path d="M4 52 Q7 50 30 49 Q53 50 56 52 L56 57 Q53 55 30 54 Q7 55 4 57Z" fill="#f4d03f"/>
-  <!-- "101" number patch -->
-  <rect x="19" y="48" width="22" height="7" rx="2" fill="#f4d03f"/>
-  <text x="30" y="54" text-anchor="middle" font-size="5.5" font-weight="bold" fill="#1a5276" font-family="monospace">101</text>
-  <!-- Neck -->
-  <rect x="25" y="37" width="10" height="8" fill="#f0c8a0"/>
-  <!-- Big round cartoon head -->
-  <circle cx="30" cy="25" r="21" fill="#f0c8a0"/>
-  <!-- Blonde 1950s-style hair combed to side with retro wave -->
-  <ellipse cx="30" cy="7" rx="19" ry="9" fill="#ffd700"/>
-  <rect x="11" y="7"  width="38" height="9" fill="#ffd700"/>
-  <!-- Side hair coming down slightly -->
-  <ellipse cx="12" cy="16" rx="5" ry="7" fill="#ffd700"/>
-  <!-- Hair wave / direction detail -->
-  <path d="M13 9 Q22 5 36 8 Q44 10 47 14" stroke="#c8a800" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <!-- Large round cartoon eyes (Vault Boy style) -->
-  <circle cx="20.5" cy="23" r="7.5" fill="#fff"/>
-  <circle cx="39.5" cy="23" r="7.5" fill="#fff"/>
-  <!-- Blue irises -->
-  <circle cx="21"   cy="23.5" r="5"   fill="#1565c0"/>
-  <circle cx="40"   cy="23.5" r="5"   fill="#1565c0"/>
-  <!-- Pupils -->
-  <circle cx="21"   cy="23.5" r="2.8" fill="#0d0d0d"/>
-  <circle cx="40"   cy="23.5" r="2.8" fill="#0d0d0d"/>
-  <!-- Eye shines (big — cartoon style) -->
-  <circle cx="19.5" cy="21.5" r="2" fill="#fff"/>
-  <circle cx="38.5" cy="21.5" r="2" fill="#fff"/>
-  <!-- SIGNATURE HUGE GRIN with visible teeth -->
-  <path d="M14 34 Q30 48 46 34 Q45 40 30 43 Q15 40 14 34Z" fill="#fff"/>
-  <path d="M14 34 Q30 48 46 34" stroke="#c8956b" stroke-width="1.5" fill="none"/>
-  <!-- Tooth separators -->
-  <line x1="19" y1="34.5" x2="19" y2="41"  stroke="#c8956b" stroke-width="1.2"/>
-  <line x1="23" y1="35.5" x2="23" y2="42"  stroke="#c8956b" stroke-width="1.2"/>
-  <line x1="27" y1="36"   x2="27" y2="42.5" stroke="#c8956b" stroke-width="1.2"/>
-  <line x1="30" y1="36.5" x2="30" y2="43"  stroke="#c8956b" stroke-width="1.2"/>
-  <line x1="33" y1="36"   x2="33" y2="42.5" stroke="#c8956b" stroke-width="1.2"/>
-  <line x1="37" y1="35.5" x2="37" y2="42"  stroke="#c8956b" stroke-width="1.2"/>
-  <line x1="41" y1="34.5" x2="41" y2="41"  stroke="#c8956b" stroke-width="1.2"/>
-  <!-- THUMBS UP (right side — the iconic Vault Boy pose) -->
-  <rect  x="48" y="34" width="9"  height="12" rx="4.5" fill="#f0c8a0"/>
-  <ellipse cx="47.5" cy="31" rx="4.5" ry="6" fill="#f0c8a0" transform="rotate(-15 47.5 31)"/>
-  <!-- White glove cuff -->
-  <rect  x="47" y="40" width="11" height="4"  rx="2"   fill="#f5f5f5"/>
+  <rect x="17" y="47" width="11" height="13" rx="2" fill="#3d7090" stroke="#111" stroke-width="1.5"/>
+  <rect x="32" y="47" width="11" height="13" rx="2" fill="#3d7090" stroke="#111" stroke-width="1.5"/>
+  <ellipse cx="22.5" cy="59" rx="6.5" ry="3" fill="#9a9a9a" stroke="#111" stroke-width="1"/>
+  <ellipse cx="37.5" cy="59" rx="6.5" ry="3" fill="#9a9a9a" stroke="#111" stroke-width="1"/>
+  <rect x="14" y="30" width="32" height="20" rx="3" fill="#3d7090" stroke="#111" stroke-width="1.5"/>
+  <rect x="24" y="30" width="12" height="20" fill="#c8b870" stroke="#111" stroke-width="0.8"/>
+  <rect x="6" y="30" width="10" height="17" rx="3" fill="#3d7090" stroke="#111" stroke-width="1.5"/>
+  <circle cx="11" cy="48" r="4.5" fill="#d4c880" stroke="#111" stroke-width="1.2"/>
+  <rect x="44" y="19" width="10" height="17" rx="3" fill="#3d7090" stroke="#111" stroke-width="1.5" transform="rotate(-12,49,27)"/>
+  <ellipse cx="50.5" cy="17" rx="5.5" ry="5" fill="#d4c880" stroke="#111" stroke-width="1.5"/>
+  <rect x="48" y="8" width="5.5" height="11" rx="2.8" fill="#d4c880" stroke="#111" stroke-width="1.5"/>
+  <rect x="45" y="19" width="11" height="3.5" rx="1.5" fill="white" stroke="#111" stroke-width="1"/>
+  <circle cx="30" cy="19" r="14" fill="#d8ca80" stroke="#111" stroke-width="2"/>
+  <path d="M17,15 Q19,6 25,7 Q27,4 30,5 Q33,4 35,7 Q41,6 43,15" fill="#d4aa20" stroke="#111" stroke-width="1.5"/>
+  <path d="M20,11 Q24,8 28,10" stroke="#b08810" stroke-width="1" fill="none"/>
+  <circle cx="24" cy="19" r="4" fill="white" stroke="#111" stroke-width="1.5"/>
+  <circle cx="24" cy="19" r="2.5" fill="#111"/>
+  <circle cx="25" cy="18" r="0.8" fill="white"/>
+  <path d="M33,18 Q36.5,15.5 40,18" stroke="#111" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M21,14 Q24,12 27,14" stroke="#111" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M33,13 Q36.5,11 40,13" stroke="#111" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M19,24 Q30,32 41,24 L41,28 Q30,35 19,28 Z" fill="white" stroke="#111" stroke-width="1.5"/>
+  <line x1="23" y1="24" x2="23" y2="28" stroke="#ccc" stroke-width="1"/>
+  <line x1="26.5" y1="25.5" x2="26.5" y2="29.5" stroke="#ccc" stroke-width="1"/>
+  <line x1="30" y1="26.5" x2="30" y2="30.5" stroke="#ccc" stroke-width="1"/>
+  <line x1="33.5" y1="25.5" x2="33.5" y2="29.5" stroke="#ccc" stroke-width="1"/>
+  <line x1="37" y1="24" x2="37" y2="28" stroke="#ccc" stroke-width="1"/>
+  <circle cx="30" cy="22" r="1.5" fill="#b0a050"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   МИСТЕР МОНОПОЛИЯ / Milburn Pennybags
-   Key: tall black top hat · large white handlebar moustache ·
-        gold monocle with chain · red bow-tie · black tuxedo ·
-        rosy cheeks on portly dignified face
-───────────────────────────────────────────────────────────── */
+/* ── 11. МИСТЕР МОНОПОЛИЯ ───────────────────────────────────────────── */
 mrmonopoly: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Black tuxedo -->
-  <path d="M4 62 Q8 46 30 43 Q52 46 56 62Z" fill="#1a1a1a"/>
-  <!-- White shirt front / waistcoat -->
-  <path d="M25 48 L30 44 L35 48 L33 62 L27 62Z" fill="#f5f5f5"/>
-  <!-- Red bow tie (very distinctive) -->
-  <path d="M26 47 L30 44 L34 47 L30 49.5Z" fill="#c62828"/>
-  <!-- White collar -->
-  <path d="M21 47 Q25 44 30 43 Q35 44 39 47 L37 49 Q30 46.5 23 49Z" fill="#f5f5f5"/>
-  <!-- Neck -->
-  <rect x="25.5" y="39" width="9" height="7" fill="#d4a574"/>
-  <!-- Face — portly elderly gentleman -->
-  <ellipse cx="30" cy="27" rx="17.5" ry="19" fill="#d4a574"/>
-  <!-- White hair on temples (distinguished older man) -->
-  <ellipse cx="12" cy="27" rx="5.5" ry="7.5" fill="#e8e0d0"/>
-  <ellipse cx="48" cy="27" rx="5.5" ry="7.5" fill="#e8e0d0"/>
-  <!-- ★ TOP HAT — the single most iconic feature ★ -->
-  <!-- Wide brim -->
-  <rect x="7"  y="16" width="46" height="6"  rx="3"   fill="#1a1a1a"/>
-  <!-- Tall crown -->
-  <rect x="16" y="2"  width="28" height="16" rx="2.5" fill="#1a1a1a"/>
-  <!-- Hat band (subtle detail) -->
-  <rect x="16" y="13" width="28" height="3.5" fill="#2a2a2a"/>
-  <!-- Rosy cheeks -->
-  <circle cx="17" cy="30" r="5.5" fill="#e87878" opacity="0.5"/>
-  <circle cx="43" cy="30" r="5.5" fill="#e87878" opacity="0.5"/>
-  <!-- Eyebrows (grey, bushy) -->
-  <path d="M18.5 22.5 Q22.5 21 26.5 22" stroke="#a0a090" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <path d="M33.5 22 Q37.5 21 41.5 22.5" stroke="#a0a090" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <!-- Left eye -->
-  <circle cx="23" cy="26" r="4" fill="#fff"/>
-  <circle cx="23" cy="26.5" r="2.5" fill="#2a2a2a"/>
-  <circle cx="24" cy="25.2" r="1.1" fill="#fff"/>
-  <!-- Right eye -->
-  <circle cx="37" cy="26" r="4" fill="#fff"/>
-  <circle cx="37" cy="26.5" r="2.5" fill="#2a2a2a"/>
-  <circle cx="38" cy="25.2" r="1.1" fill="#fff"/>
-  <!-- ★ MONOCLE on right eye (gold, with chain) ★ -->
-  <circle cx="37" cy="26" r="6.5" fill="none" stroke="#c8a820" stroke-width="2.2"/>
-  <line x1="42.5" y1="31"  x2="45" y2="36" stroke="#c8a820" stroke-width="1.8" stroke-linecap="round"/>
-  <!-- ★ BIG WHITE HANDLEBAR MOUSTACHE (very distinctive) ★ -->
-  <path d="M18 33 Q22 38 30 35 Q38 38 42 33 Q38 30 30 33 Q22 30 18 33Z" fill="#e8e0d0"/>
-  <!-- Moustache curl tips (handlebar ends curl up) -->
-  <path d="M18 33 Q16 29.5 17.5 27.5" stroke="#e0d8c8" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-  <path d="M42 33 Q44 29.5 42.5 27.5" stroke="#e0d8c8" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-  <!-- Smile visible below moustache -->
-  <path d="M23 38 Q30 43 37 38" stroke="#c0906a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M7,60 L7,42 Q15,32 24,30 L30,34 L36,30 Q45,32 53,42 L53,60 Z" fill="#1a1a1a"/>
+  <path d="M26,30 L30,34 L34,30 L34,45 L26,45 Z" fill="white"/>
+  <polygon points="24,32 30,37 36,32 30,27" fill="#c0392b"/>
+  <rect x="26" y="26" width="8" height="7" rx="2" fill="#f0d8a8"/>
+  <ellipse cx="30" cy="19" rx="15" ry="16" fill="#f0d8a8"/>
+  <circle cx="18" cy="24" r="5.5" fill="#e89090" opacity="0.38"/>
+  <circle cx="42" cy="24" r="5.5" fill="#e89090" opacity="0.38"/>
+  <ellipse cx="15" cy="22" rx="4" ry="7" fill="#e8e8e0"/>
+  <ellipse cx="45" cy="22" rx="4" ry="7" fill="#e8e8e0"/>
+  <rect x="16" y="1" width="28" height="16" rx="1.5" fill="#1a1a1a"/>
+  <rect x="18" y="2" width="4" height="14" rx="1" fill="#282828" opacity="0.5"/>
+  <rect x="10" y="15" width="40" height="5" rx="1.5" fill="#1a1a1a"/>
+  <rect x="16" y="14" width="28" height="3" fill="#9a9080"/>
+  <ellipse cx="23" cy="21" rx="3.5" ry="3.5" fill="white"/>
+  <circle cx="23" cy="21" r="2.2" fill="#352840"/>
+  <circle cx="24" cy="20" r="0.8" fill="white"/>
+  <circle cx="37" cy="21" r="5.2" fill="none" stroke="#c8a030" stroke-width="1.8"/>
+  <ellipse cx="37" cy="21" rx="3.5" ry="3.5" fill="white"/>
+  <circle cx="37" cy="21" r="2.2" fill="#352840"/>
+  <circle cx="38" cy="20" r="0.8" fill="white"/>
+  <path d="M41.5,24 Q45,26 44,31" stroke="#c8a030" stroke-width="1.3" fill="none"/>
+  <path d="M19,17 Q23,14.5 27,17" stroke="#5a4030" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M33,17 Q37,14.5 41,17" stroke="#5a4030" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M19,27 Q23,24.5 30,27 Q37,24.5 41,27 Q39,30.5 35,29 Q32,27.5 30,29.5 Q28,27.5 25,29 Q21,30.5 19,27 Z" fill="#e0dcd0"/>
+  <path d="M19,27 Q16,26 17,31" stroke="#c0b8a8" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M41,27 Q44,26 43,31" stroke="#c0b8a8" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M26,31 Q30,35.5 34,31" stroke="#b07850" stroke-width="1.5" fill="none" stroke-linecap="round"/>
 </svg>`,
 
-/* ─────────────────────────────────────────────────────────────
-   ХЭППИ МИЛ с глазками  (McDonald's retro mascot)
-   Key: red square Happy Meal box as the face/head · golden M
-        arches logo · large cartoon eyes with eyelashes ·
-        big red smile · carrying handle on top
-───────────────────────────────────────────────────────────── */
+/* ── 12. ХЭППИ МИЛ ─────────────────────────────────────────────────── */
 happymeal: `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Handle tabs at top -->
-  <path d="M22 4 Q30 0 38 4 L37 9 Q30 6 23 9Z" fill="#c53030"/>
-  <!-- Main red box body (this IS the character) -->
-  <rect x="6"  y="8"  width="48" height="50" rx="4" fill="#e53e3e"/>
-  <!-- Side shadow for depth -->
-  <rect x="6"  y="8"  width="7"  height="50" rx="2" fill="#c53030"/>
-  <rect x="47" y="8"  width="7"  height="50" rx="2" fill="#c53030"/>
-  <!-- Top fold crease -->
-  <rect x="6"  y="8"  width="48" height="7"  rx="3" fill="#d03535"/>
-  <!-- ★ GOLDEN ARCHES M logo (iconic McDonald's branding) ★ -->
-  <path d="M17 36 Q17 25 23 25 Q28 25 28 31 Q28 25 33 25 Q38 25 38 36"
-        fill="none" stroke="#fbbf24" stroke-width="5.5" stroke-linecap="round"/>
-  <!-- Big cartoon EYES (above the arches) -->
-  <!-- Left eye white -->
-  <circle cx="19" cy="47" r="8"   fill="#fff"/>
-  <!-- Left iris -->
-  <circle cx="20" cy="48" r="5"   fill="#1565c0"/>
-  <!-- Left pupil -->
-  <circle cx="20" cy="48" r="2.8" fill="#0d0d0d"/>
-  <!-- Left shine -->
-  <circle cx="18.5" cy="46" r="1.8" fill="#fff"/>
-  <!-- Right eye white -->
-  <circle cx="41" cy="47" r="8"   fill="#fff"/>
-  <circle cx="42" cy="48" r="5"   fill="#1565c0"/>
-  <circle cx="42" cy="48" r="2.8" fill="#0d0d0d"/>
-  <circle cx="40.5" cy="46" r="1.8" fill="#fff"/>
-  <!-- Eyelashes left (3 lashes — gives the retro mascot personality) -->
-  <line x1="12.5" y1="41.5" x2="10"  y2="37.5" stroke="#0d0d0d" stroke-width="1.8" stroke-linecap="round"/>
-  <line x1="18"   y1="40"   x2="17"  y2="36.5" stroke="#0d0d0d" stroke-width="1.8" stroke-linecap="round"/>
-  <line x1="23.5" y1="41"   x2="26"  y2="37.5" stroke="#0d0d0d" stroke-width="1.8" stroke-linecap="round"/>
-  <!-- Eyelashes right -->
-  <line x1="36.5" y1="41"   x2="34"  y2="37.5" stroke="#0d0d0d" stroke-width="1.8" stroke-linecap="round"/>
-  <line x1="42"   y1="40"   x2="42"  y2="36.5" stroke="#0d0d0d" stroke-width="1.8" stroke-linecap="round"/>
-  <line x1="47.5" y1="41.5" x2="50"  y2="37.5" stroke="#0d0d0d" stroke-width="1.8" stroke-linecap="round"/>
-  <!-- Big smile on the box -->
-  <path d="M21 56 Q30 62 39 56" stroke="#c53030" stroke-width="3" fill="none" stroke-linecap="round"/>
-</svg>`
+  <rect x="18" y="51" width="8" height="10" rx="4" fill="#e8e8e8" stroke="#c0c0c0" stroke-width="1"/>
+  <rect x="34" y="51" width="8" height="10" rx="4" fill="#e8e8e8" stroke="#c0c0c0" stroke-width="1"/>
+  <ellipse cx="22" cy="60" rx="6" ry="3" fill="#2a2a5a"/>
+  <ellipse cx="38" cy="60" rx="6" ry="3" fill="#2a2a5a"/>
+  <rect x="2" y="27" width="9" height="21" rx="4.5" fill="#e8e8e8" stroke="#c0c0c0" stroke-width="1"/>
+  <rect x="49" y="27" width="9" height="21" rx="4.5" fill="#e8e8e8" stroke="#c0c0c0" stroke-width="1"/>
+  <circle cx="6.5" cy="49" r="4.5" fill="#e8e8e8" stroke="#c0c0c0" stroke-width="1"/>
+  <circle cx="53.5" cy="49" r="4.5" fill="#e8e8e8" stroke="#c0c0c0" stroke-width="1"/>
+  <rect x="9" y="16" width="42" height="38" rx="3" fill="#e52020"/>
+  <rect x="9" y="16" width="42" height="6" rx="3" fill="#c81818"/>
+  <ellipse cx="30" cy="46" rx="18" ry="12" fill="#0a0a0a"/>
+  <ellipse cx="30" cy="45" rx="16" ry="10" fill="white"/>
+  <ellipse cx="30" cy="53" rx="11" ry="4.5" fill="#e04060"/>
+  <line x1="20.5" y1="35" x2="20.5" y2="55" stroke="#ddd" stroke-width="1.5"/>
+  <line x1="24.5" y1="35" x2="24.5" y2="55" stroke="#ddd" stroke-width="1.5"/>
+  <line x1="30" y1="35" x2="30" y2="55" stroke="#ddd" stroke-width="1.5"/>
+  <line x1="35.5" y1="35" x2="35.5" y2="55" stroke="#ddd" stroke-width="1.5"/>
+  <line x1="39.5" y1="35" x2="39.5" y2="55" stroke="#ddd" stroke-width="1.5"/>
+  <path d="M9,21 Q16,12 22,19 Q26,12 30,16 Q34,12 38,19 Q44,12 51,21"
+        fill="#ff8c00" stroke="#cc6a00" stroke-width="0.8"/>
+  <circle cx="22" cy="24" r="6.5" fill="white" stroke="#ff8c00" stroke-width="2"/>
+  <circle cx="22" cy="24" r="4.5" fill="#18a8a8"/>
+  <circle cx="22" cy="24" r="2.8" fill="#0e7878"/>
+  <circle cx="23.3" cy="22.7" r="1.1" fill="white"/>
+  <circle cx="38" cy="24" r="6.5" fill="white" stroke="#ff8c00" stroke-width="2"/>
+  <circle cx="38" cy="24" r="4.5" fill="#18a8a8"/>
+  <circle cx="38" cy="24" r="2.8" fill="#0e7878"/>
+  <circle cx="39.3" cy="22.7" r="1.1" fill="white"/>
+</svg>`,
 
-}; /* end window.AVATARS */
+}; // end window.AVATARS
