@@ -70,6 +70,9 @@ const peerConnections = {};
 const peerMeta        = {};
 const makingOffer     = {};
 
+/* ID создателя комнаты (первый вошедший) — для значка короны */
+let roomCreatorId = null;
+
 /* ── Состояние ── */
 let micEnabled    = initMic;
 let camEnabled    = initCam;
@@ -139,14 +142,62 @@ const servers = {
 /* ════════════════════════════════════════════
    УЧАСТНИКИ
 ════════════════════════════════════════════ */
-function addParticipant(id, username) {
-    if (document.getElementById("participant-" + id)) return;
+function addParticipant(id, username, userAvatar, isCreator) {
+    /* Если уже есть — только корону добавить если нужно */
+    const existing = document.getElementById("participant-" + id);
+    if (existing) {
+        if (isCreator && !existing.querySelector(".participant-crown")) {
+            const crown = document.createElement("span");
+            crown.className = "participant-crown";
+            crown.title = "Создатель комнаты";
+            crown.textContent = "👑";
+            existing.appendChild(crown);
+        }
+        return;
+    }
     const div = document.createElement("div");
     div.className = "participant";
     div.id = "participant-" + id;
-    div.textContent = username;
+
+    /* Маленький аватар */
+    const av = document.createElement("div");
+    av.className = "participant-avatar";
+    if (window.AVATARS && window.AVATARS[userAvatar]) {
+        av.innerHTML = window.AVATARS[userAvatar];
+    } else {
+        av.textContent = userAvatar || "?";
+    }
+    div.appendChild(av);
+
+    /* Имя */
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "participant-name";
+    nameSpan.textContent = username;
+    div.appendChild(nameSpan);
+
+    /* Корона создателя */
+    if (isCreator) {
+        const crown = document.createElement("span");
+        crown.className = "participant-crown";
+        crown.title = "Создатель комнаты";
+        crown.textContent = "👑";
+        div.appendChild(crown);
+    }
+
     participantsDiv.appendChild(div);
 }
+
+/* Добавить корону к уже существующему участнику */
+function setCreatorCrown(id) {
+    const div = document.getElementById("participant-" + id);
+    if (!div || div.querySelector(".participant-crown")) return;
+    const crown = document.createElement("span");
+    crown.className = "participant-crown";
+    crown.title = "Создатель комнаты";
+    crown.textContent = "👑";
+    div.appendChild(crown);
+}
+
 function removeParticipant(id) {
     document.getElementById("participant-" + id)?.remove();
 }
@@ -561,7 +612,10 @@ function createPeer(id) {
 
     pc.ontrack = e => {
         const meta = peerMeta[id] || { name: "Участник", avatar: "ironman" };
-        if (!document.getElementById("box-" + id)) createVideoBox(id, meta.name, meta.avatar);
+        if (!document.getElementById("box-" + id)) {
+            createVideoBox(id, meta.name, meta.avatar);
+            addParticipant(id, meta.name, meta.avatar, id === roomCreatorId);
+        }
 
         if (e.track.kind === "video") {
             showVideoInBox(id, e.streams[0], false, false);
@@ -624,10 +678,27 @@ socket.on("server-shutdown", () => {
     showToast("Сервер перезапускается…", "info");
 });
 
-socket.on("room-users", existingUsers => {
-    for (const user of existingUsers) {
+socket.on("room-users", data => {
+    /* Поддержка старого формата (массив) и нового ({ users, creatorId }) */
+    const users     = Array.isArray(data) ? data : (data.users || []);
+    const creatorId = Array.isArray(data) ? null : (data.creatorId || null);
+
+    /* Определяем создателя */
+    if (users.length === 0) {
+        /* Я первый в комнате — значит я создатель */
+        roomCreatorId = socket.id;
+    } else if (creatorId) {
+        roomCreatorId = creatorId;
+    }
+
+    /* Обновляем корону локального участника если он создатель */
+    if (roomCreatorId === socket.id) {
+        setCreatorCrown("local");
+    }
+
+    for (const user of users) {
         peerMeta[user.id] = { name: user.name, avatar: user.avatar };
-        addParticipant(user.id, user.name);
+        addParticipant(user.id, user.name, user.avatar, user.id === roomCreatorId);
         createVideoBox(user.id, user.name, user.avatar);
         createPeer(user.id);
     }
@@ -635,7 +706,7 @@ socket.on("room-users", existingUsers => {
 
 socket.on("user-connected", async data => {
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "ironman" };
-    addParticipant(data.id, data.name);
+    addParticipant(data.id, data.name, data.avatar || "ironman", data.id === roomCreatorId);
     createVideoBox(data.id, data.name, data.avatar || "ironman");
 
     const pc = createPeer(data.id);
@@ -687,7 +758,7 @@ socket.on("offer", async data => {
         peerMeta[data.from] = { name: data.name, avatar: data.avatar || "ironman" };
         if (!document.getElementById("box-" + data.from)) {
             createVideoBox(data.from, data.name, data.avatar || "ironman");
-            addParticipant(data.from, data.name);
+            addParticipant(data.from, data.name, data.avatar || "ironman", data.from === roomCreatorId);
         } else {
             const label = document.getElementById("label-" + data.from);
             if (label) label.innerHTML = makeLabelHTML(data.name, false, false);
@@ -1010,7 +1081,7 @@ leaveBtn.onclick = () => {
    ИНИЦИАЛИЗАЦИЯ
 ════════════════════════════════════════════ */
 createVideoBox("local", name, avatar);
-addParticipant("local", name);
+addParticipant("local", name, avatar, false); /* корона выставляется после получения room-users */
 updateGridLayout();
 setMicIcon();
 setCamIcon();

@@ -25,8 +25,16 @@
 
   <input id="nickname" placeholder="Ваш никнейм" type="text" autocomplete="off" maxlength="64">
 
-  <div class="avatar-picker" id="avatarPickerHome"></div>
-  <input type="hidden" id="avatar" value="po">
+  <!-- Рандомный аватар + кубик -->
+  <div class="avatar-random-section">
+    <div class="avatar-random-display" id="avatarDisplayHome"></div>
+    <div class="avatar-random-label" id="avatarLabelHome"></div>
+    <button type="button" class="dice-btn" id="diceBtnHome" title="Выбрать другого Мстителя">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+      Другой Мститель
+    </button>
+  </div>
+  <input type="hidden" id="avatar" value="ironman">
 
   <div class="home-actions">
     <div class="action-section">
@@ -52,8 +60,16 @@
 
   <input id="nicknameLink" placeholder="Ваш никнейм" type="text" autocomplete="off" maxlength="64">
 
-  <div class="avatar-picker" id="avatarPickerLink"></div>
-  <input type="hidden" id="avatarLink" value="po">
+  <!-- Рандомный аватар + кубик -->
+  <div class="avatar-random-section">
+    <div class="avatar-random-display" id="avatarDisplayLink"></div>
+    <div class="avatar-random-label" id="avatarLabelLink"></div>
+    <button type="button" class="dice-btn" id="diceBtnLink" title="Выбрать другого Мстителя">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+      Другой Мститель
+    </button>
+  </div>
+  <input type="hidden" id="avatarLink" value="ironman">
 
   <button class="join-btn" onclick="joinViaLink()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -64,29 +80,79 @@
 
 <script src="avatars.js"></script>
 <script>
-/* ── Инициализация аватарок ── */
-function initAvatarPicker(containerId, hiddenId) {
-    const container = document.getElementById(containerId);
-    if (!container || !window.AVATARS) return;
-    let first = true;
-    for (const [key, svg] of Object.entries(window.AVATARS)) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "avatar-option" + (first ? " selected" : "");
-        btn.setAttribute("data-key", key);
-        btn.setAttribute("title", window.AVATAR_LABELS?.[key] || key);
-        btn.innerHTML = svg;
-        btn.onclick = () => {
-            container.querySelectorAll(".avatar-option").forEach(b => b.classList.remove("selected"));
-            btn.classList.add("selected");
-            document.getElementById(hiddenId).value = key;
-        };
-        container.appendChild(btn);
-        if (first) { document.getElementById(hiddenId).value = key; first = false; }
+/* ════════════════════════════════════════
+   РАНДОМНЫЙ АВАТАР + КУБИК
+════════════════════════════════════════ */
+const AVATAR_SAVED_KEY = "vc_avatar";
+
+function getRandomAvatarKey(exclude) {
+    const keys = Object.keys(window.AVATARS || {});
+    if (!keys.length) return "ironman";
+    const pool = keys.length > 1 ? keys.filter(k => k !== exclude) : keys;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/* Анимация прокрутки аватарок — эффект слот-машины */
+const ROLL_DELAYS = [55,55,60,65,70,80,95,115,140,170,210,260,320,400];
+
+function rollDice(displayEl, labelEl, hiddenInputEl, btnEl) {
+    if (btnEl) btnEl.disabled = true;
+    const keys = Object.keys(window.AVATARS || {});
+    if (!keys.length) return;
+
+    const total    = ROLL_DELAYS.length;
+    let   count    = 0;
+    const finalKey = getRandomAvatarKey(hiddenInputEl.value);
+
+    function step() {
+        const key = (count === total - 1)
+            ? finalKey
+            : keys[Math.floor(Math.random() * keys.length)];
+
+        displayEl.innerHTML = window.AVATARS[key];
+        hiddenInputEl.value = key; /* всегда актуальное значение, даже в процессе анимации */
+        displayEl.classList.remove("avatar-rolling");
+        void displayEl.offsetWidth; /* принудительный reflow для перезапуска анимации */
+        displayEl.classList.add("avatar-rolling");
+
+        if (count === total - 1) {
+            if (labelEl) labelEl.textContent = window.AVATAR_LABELS?.[finalKey] || finalKey;
+            localStorage.setItem(AVATAR_SAVED_KEY, finalKey);
+            if (btnEl) btnEl.disabled = false;
+            return;
+        }
+        count++;
+        setTimeout(step, ROLL_DELAYS[count]);
+    }
+    step();
+}
+
+function setAvatar(displayEl, labelEl, hiddenInputEl, key) {
+    if (!window.AVATARS || !window.AVATARS[key]) return;
+    displayEl.innerHTML = window.AVATARS[key];
+    if (labelEl) labelEl.textContent = window.AVATAR_LABELS?.[key] || key;
+    hiddenInputEl.value = key;
+}
+
+function initRandomAvatar(displayId, labelId, hiddenId, diceBtnId) {
+    const displayEl  = document.getElementById(displayId);
+    const labelEl    = document.getElementById(labelId);
+    const hiddenEl   = document.getElementById(hiddenId);
+    const diceBtn    = document.getElementById(diceBtnId);
+    if (!displayEl || !hiddenEl || !window.AVATARS) return;
+
+    /* Восстанавливаем сохранённый аватар или берём случайный */
+    const saved = localStorage.getItem(AVATAR_SAVED_KEY);
+    const key   = (saved && window.AVATARS[saved]) ? saved : getRandomAvatarKey();
+    setAvatar(displayEl, labelEl, hiddenEl, key);
+
+    if (diceBtn) {
+        diceBtn.onclick = () => rollDice(displayEl, labelEl, hiddenEl, diceBtn);
     }
 }
-initAvatarPicker("avatarPickerHome", "avatar");
-initAvatarPicker("avatarPickerLink", "avatarLink");
+
+initRandomAvatar("avatarDisplayHome", "avatarLabelHome", "avatar",     "diceBtnHome");
+initRandomAvatar("avatarDisplayLink", "avatarLabelLink", "avatarLink", "diceBtnLink");
 
 /* ── Запоминание ника (localStorage) ── */
 const NICK_KEY = "vc_nickname";

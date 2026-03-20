@@ -100,14 +100,21 @@ io.on("connection", socket => {
         socket.data.room   = room;
         socket.data.avatar = avatar;
 
-        if (!rooms.has(room)) rooms.set(room, new Map());
+        if (!rooms.has(room)) {
+            const m = new Map();
+            m._creator = socket.id;   /* первый вошедший = создатель комнаты */
+            rooms.set(room, m);
+        }
         const members = rooms.get(room);
 
         /* Список уже присутствующих — новому участнику */
         const existingUsers = [...members.entries()].map(([id, u]) => ({
             id, name: u.name, avatar: u.avatar
         }));
-        socket.emit("room-users", existingUsers);
+        socket.emit("room-users", {
+            users:     existingUsers,
+            creatorId: members._creator || null
+        });
 
         members.set(socket.id, { name, avatar });
 
