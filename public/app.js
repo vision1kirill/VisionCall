@@ -646,11 +646,26 @@ socket.on("user-connected", async data => {
         });
     }
     if (screenEnabled && screenStream) {
-        const st = screenStream.getVideoTracks()[0];
-        if (st && !pc.getSenders().find(s => s.track === st)) pc.addTrack(st, screenStream);
-        screenStream.getAudioTracks().forEach(at => {
-            if (!pc.getSenders().find(s => s.track === at)) pc.addTrack(at, screenStream);
-        });
+        /* Видео экрана: заменяем видео-сендер (replaceTrack, без renegotiation) */
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (screenTrack) {
+            const vSender = pc.getSenders().find(s => s.track?.kind === "video");
+            if (vSender) {
+                vSender.replaceTrack(screenTrack).catch(() => {});
+            } else {
+                pc.addTrack(screenTrack, screenStream);
+            }
+        }
+        /* Аудио экрана: если WebAudio-микс активен — заменяем аудио-сендер
+           смешанным треком. addTrack для аудио экрана вызывает renegotiation
+           и ломает звук на iOS. */
+        if (screenAudioMix) {
+            const mixedTrack = screenAudioMix.dest.stream.getAudioTracks()[0];
+            if (mixedTrack) {
+                const aSender = pc.getSenders().find(s => s.track?.kind === "audio");
+                if (aSender) aSender.replaceTrack(mixedTrack).catch(() => {});
+            }
+        }
     }
 
     try {
@@ -764,7 +779,9 @@ micBtn.onclick = async () => {
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => {
         t.enabled = micEnabled;
-        addTrackToPeers(t, localStream);
+        /* Не заменяем аудио-сендер если активен WebAudio-микс screen share:
+           WebAudio-граф читает из того же трека и сам передаёт тишину/звук. */
+        if (!screenAudioMix) addTrackToPeers(t, localStream);
     });
     setMicIcon();
     updateLabelIcons("local", micEnabled, camEnabled);
@@ -786,14 +803,20 @@ camBtn.onclick = async () => {
     camEnabled = !camEnabled;
     localStream.getVideoTracks().forEach(t => {
         t.enabled = camEnabled;
-        addTrackToPeers(t, localStream);
+        /* Не заменяем видео-сендер если демонстрация экрана активна —
+           иначе собеседники потеряют экран и увидят камеру. */
+        if (!screenEnabled) addTrackToPeers(t, localStream);
     });
     setCamIcon();
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
-    if (flipBtn) flipBtn.style.display = camEnabled ? "" : "none";
-    if (camEnabled) showVideoInBox("local", localStream, true, false);
-    else            showAvatarInBox("local", avatar);
+    /* Кнопка перевёртки камеры видна только если камера включена и нет screen share */
+    if (flipBtn) flipBtn.style.display = (camEnabled && !screenEnabled) ? "" : "none";
+    /* Обновляем локальный бокс только если screen share не активен */
+    if (!screenEnabled) {
+        if (camEnabled) showVideoInBox("local", localStream, true, false);
+        else            showAvatarInBox("local", avatar);
+    }
 };
 
 if (flipBtn) { flipBtn.onclick = () => switchCamera(); }

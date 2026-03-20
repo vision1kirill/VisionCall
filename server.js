@@ -124,7 +124,7 @@ io.on("connection", socket => {
             offer:  data.offer,
             from:   socket.id,
             name:   socket.data.name   || "Участник",
-            avatar: socket.data.avatar || "🙂"
+            avatar: socket.data.avatar || "po"
         });
     });
 

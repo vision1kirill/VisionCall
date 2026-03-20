@@ -5,7 +5,7 @@
 const params = new URLSearchParams(window.location.search);
 const room   = params.get("room");
 const name   = params.get("name");
-const avatar = params.get("avatar") || "😀";
+const avatar = params.get("avatar") || "po";
 
 if (!room || !name || name === "null") {
     window.location.replace("/");
