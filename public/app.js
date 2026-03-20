@@ -820,6 +820,40 @@ socket.on("screen-share-state", data => {
     if (!box) return;
     const vid = box.querySelector("video");
     if (vid) vid.classList.toggle("screen-video", data.sharing);
+
+    if (data.sharing) {
+        /* Показываем слайдер громкости звука экрана для зрителей.
+           Аудио доставляется через тот же аудио-сендер (replaceTrack/WebAudio-микс),
+           поэтому управляем громкостью через volume на video / audio элементе. */
+        if (!box.querySelector(".rsa-viewer-panel")) {
+            const panel = document.createElement("div");
+            panel.className = "screen-audio-panel remote-screen-audio-panel rsa-viewer-panel";
+            panel.innerHTML = `
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span class="screen-audio-label">Звук экрана</span>
+                <label class="sr-only" for="rsa-v-${data.from}">Громкость звука экрана</label>
+                <input id="rsa-v-${data.from}" type="range" class="rsa-slider" min="0" max="100" value="100" step="5">
+                <span class="screen-audio-value">100%</span>`;
+            box.appendChild(panel);
+            const slider = panel.querySelector(".rsa-slider");
+            const valEl  = panel.querySelector(".screen-audio-value");
+            slider.oninput = function () {
+                const pct = parseInt(this.value);
+                valEl.textContent = pct + "%";
+                const vol = pct / 100;
+                /* Управляем громкостью: video-элемент или скрытый audio */
+                const v = box.querySelector("video");
+                if (v) v.volume = vol;
+                if (peerAudioEls[data.from]) peerAudioEls[data.from].volume = vol;
+            };
+        }
+    } else {
+        /* Убираем слайдер громкости и любые устаревшие элементы screen audio */
+        box.querySelector(".rsa-viewer-panel")?.remove();
+        removeRemoteScreenAudio(data.from);
+    }
 });
 
 /* ════════════════════════════════════════════
@@ -902,10 +936,13 @@ function setScreenIcon() {
     screenBtn.setAttribute("aria-pressed", screenEnabled ? "true" : "false");
 }
 
-let screenAudioEl  = null;
-let screenAudioMix = null; /* { micSrc, screenSrc, dest } for WebAudio mix */
+let screenAudioMix = null; /* { micSrc, screenSrc, screenGain, dest } for WebAudio mix */
 
-function showScreenAudioPanel(stream) {
+/* ── Панель звука экрана (только для того, кто делится экраном).
+   Локально звук НЕ воспроизводится — пользователь уже слышит его через ОС.
+   Слайдер управляет уровнем звука экрана в WebAudio-миксе, который
+   отправляется собеседникам. ── */
+function showScreenAudioPanel() {
     let panel = document.getElementById("screenAudioPanel");
     if (!panel) {
         panel = document.createElement("div");
@@ -915,34 +952,29 @@ function showScreenAudioPanel(stream) {
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
-            <span class="screen-audio-label">Звук экрана</span>
-            <label class="sr-only" for="screenAudioSlider">Громкость вашего звука экрана</label>
+            <span class="screen-audio-label">Звук экрана → участникам</span>
+            <label class="sr-only" for="screenAudioSlider">Уровень звука экрана для участников</label>
             <input id="screenAudioSlider" type="range" min="0" max="100" value="100" step="5">
             <span class="screen-audio-value" id="screenAudioValue">100%</span>`;
         document.querySelector(".controls").prepend(panel);
         document.getElementById("screenAudioSlider").oninput = function () {
             const pct = parseInt(this.value);
             document.getElementById("screenAudioValue").textContent = pct + "%";
-            if (screenAudioEl) screenAudioEl.volume = pct / 100;
+            /* Управляем уровнем звука экрана в WebAudio-миксе для собеседников */
+            if (screenAudioMix?.screenGain) {
+                screenAudioMix.screenGain.gain.value = pct / 100;
+            }
         };
     }
     panel.style.display = "flex";
-    if (!screenAudioEl) {
-        screenAudioEl = document.createElement("audio");
-        screenAudioEl.autoplay = true;
-        document.body.appendChild(screenAudioEl);
-    }
-    screenAudioEl.srcObject = stream;
+    /* Намеренно не создаём <audio> элемент:
+       пользователь уже слышит звук экрана через ОС — воспроизведение
+       через <audio> вызвало бы дублирование звука. */
 }
 
 function hideScreenAudioPanel() {
     const panel = document.getElementById("screenAudioPanel");
     if (panel) panel.style.display = "none";
-    if (screenAudioEl) {
-        screenAudioEl.srcObject = null;
-        screenAudioEl.remove();
-        screenAudioEl = null;
-    }
 }
 
 screenBtn.onclick = async () => {
@@ -959,6 +991,7 @@ screenBtn.onclick = async () => {
         if (screenAudioMix) {
             try { screenAudioMix.micSrc?.disconnect(); } catch (e) {}
             try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
+            try { screenAudioMix.screenGain?.disconnect(); } catch (e) {}
             screenAudioMix = null;
             /* replaceTrack обратно на исходный микрофон — без рenegotiации */
             const micTrack = localStream?.getAudioTracks()[0];
@@ -1023,13 +1056,17 @@ screenBtn.onclick = async () => {
                     }
                 }
 
-                /* Аудио экрана */
+                /* Аудио экрана через gain-ноду — позволяет управлять уровнем
+                   звука экрана в миксе, отправляемом собеседникам */
+                const screenGain = ctx.createGain();
+                screenGain.gain.value = 1.0;
                 const screenAudioStream = new MediaStream(screenAudioTracks);
                 const screenSrc = ctx.createMediaStreamSource(screenAudioStream);
-                screenSrc.connect(dest);
+                screenSrc.connect(screenGain);
+                screenGain.connect(dest);
 
                 const mixedTrack = dest.stream.getAudioTracks()[0];
-                screenAudioMix = { micSrc, screenSrc, dest };
+                screenAudioMix = { micSrc, screenSrc, screenGain, dest };
 
                 /* replaceTrack — никакой renegotiation */
                 for (const [, pc] of Object.entries(peerConnections)) {
@@ -1045,7 +1082,7 @@ screenBtn.onclick = async () => {
                 /* Fallback: просто не передаём аудио экрана — зато не ломаем соединение */
             }
 
-            showScreenAudioPanel(screenStream);
+            showScreenAudioPanel();
         }
 
         showVideoInBox("local", screenStream, true, true);
@@ -1068,6 +1105,7 @@ leaveBtn.onclick = () => {
     if (screenAudioMix) {
         try { screenAudioMix.micSrc?.disconnect(); } catch (e) {}
         try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
+        try { screenAudioMix.screenGain?.disconnect(); } catch (e) {}
         screenAudioMix = null;
     }
     Object.values(peerConnections).forEach(pc => pc.close());

@@ -98,7 +98,7 @@ const ROLL_DELAYS = [55,55,60,65,70,80,95,115,140,170,210,260,320,400];
 function rollDice(displayEl, labelEl, hiddenInputEl, btnEl) {
     if (btnEl) btnEl.disabled = true;
     const keys = Object.keys(window.AVATARS || {});
-    if (!keys.length) return;
+    if (!keys.length) { if (btnEl) btnEl.disabled = false; return; }
 
     const total    = ROLL_DELAYS.length;
     let   count    = 0;
