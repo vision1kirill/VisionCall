@@ -28,10 +28,11 @@ const micGainSlider    = document.getElementById("micGainSlider");
 const gainValueEl      = document.getElementById("gainValue");
 const earphoneHint     = document.getElementById("earphoneHint");
 
-lobbyNameEl.textContent = name;
+if (lobbyNameEl) lobbyNameEl.textContent = name;
 
 /* ── Отображаем SVG-аватар (или эмодзи для обратной совместимости) ── */
 function setAvatarEl(el, key) {
+    if (!el) return;   /* #20 — null guard: элемент может отсутствовать */
     if (window.AVATARS && window.AVATARS[key]) {
         el.innerHTML = window.AVATARS[key];
     } else {
@@ -63,25 +64,29 @@ let meterAnimId  = null;
 
 /* ── Обновление иконок кнопок ── */
 function updateMicBtn() {
+    if (!micBtn) return;   /* #22 — null guard */
     micBtn.innerHTML = micEnabled ? SVG.micOn : SVG.micOff;
     micBtn.className = "lobby-ctrl-btn " + (micEnabled ? "active" : "inactive");
     micBtn.title = micEnabled ? "Выключить микрофон" : "Включить микрофон";
+    micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
 }
 function updateCamBtn() {
+    if (!camBtn) return;   /* #23 — null guard */
     camBtn.innerHTML = camEnabled ? SVG.camOn : SVG.camOff;
     camBtn.className = "lobby-ctrl-btn " + (camEnabled ? "active" : "inactive");
     camBtn.title = camEnabled ? "Выключить камеру" : "Включить камеру";
+    camBtn.setAttribute("aria-pressed", camEnabled ? "true" : "false");
 }
 
 /* ── Шкала громкости + прослушка своего голоса ── */
 function startMeter(stream) {
     try {
         if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
-        if (audioCtx) audioCtx.close();
+        if (audioCtx) { try { audioCtx.close(); } catch (_) {} }
         audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioCtx.createMediaStreamSource(stream);
         gainNode  = audioCtx.createGain();
-        gainNode.gain.value = parseInt(micGainSlider.value) / 100;
+        gainNode.gain.value = (parseInt(micGainSlider?.value) || 100) / 100;
         analyserNode = audioCtx.createAnalyser();
         analyserNode.fftSize = 256;
         analyserNode.smoothingTimeConstant = 0.55;
@@ -99,6 +104,7 @@ function startMeter(stream) {
         const data = new Uint8Array(analyserNode.frequencyBinCount);
         function tick() {
             meterAnimId = requestAnimationFrame(tick);
+            if (!micMeterFill) return;
             analyserNode.getByteFrequencyData(data);
             let sum = 0;
             for (let i = 0; i < data.length; i++) sum += data[i];
@@ -109,7 +115,7 @@ function startMeter(stream) {
             else               micMeterFill.style.background = "#ef4444";
         }
         tick();
-        micMeterSection.classList.add("visible");
+        micMeterSection?.classList.add("visible");   /* #21 — optional chaining */
         if (earphoneHint) earphoneHint.style.display = "flex";
     } catch (e) {
         console.warn("AudioContext недоступен:", e);
@@ -118,20 +124,20 @@ function startMeter(stream) {
 
 function stopMeter() {
     if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
-    micMeterFill.style.width = "0%";
+    if (micMeterFill) micMeterFill.style.width = "0%";
     if (!micEnabled) {
-        micMeterSection.classList.remove("visible");
+        micMeterSection?.classList.remove("visible");
         if (earphoneHint) earphoneHint.style.display = "none";
     }
     /* Закрываем AudioContext → прослушка полностью останавливается */
-    if (audioCtx) { audioCtx.close(); audioCtx = null; gainNode = null; analyserNode = null; }
+    if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; gainNode = null; analyserNode = null; }
 }
 
 /* ── Слайдер громкости ── */
-micGainSlider.oninput = () => {
+if (micGainSlider) micGainSlider.oninput = () => {
     const pct = micGainSlider.value;
-    gainValueEl.textContent = pct + "%";
-    if (gainNode) gainNode.gain.value = parseInt(pct) / 100;
+    if (gainValueEl) gainValueEl.textContent = pct + "%";   /* #24 — null guard */
+    if (gainNode) gainNode.gain.value = (parseInt(pct) || 0) / 100;  /* #25 — NaN guard */
 };
 
 /* ── Запрос потока ── */
@@ -143,7 +149,7 @@ async function ensureStream() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             } catch (e2) {
-                statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
+                if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
                 return false;
             }
         }
@@ -153,23 +159,27 @@ async function ensureStream() {
 }
 
 function showVideoPreview() {
+    if (!previewDiv) return;   /* #26 — null guard */
     if (!videoEl) {
         videoEl = document.createElement("video");
         videoEl.autoplay    = true;
         videoEl.muted       = true;
         videoEl.playsInline = true;
         videoEl.srcObject   = localStream;
-        previewDiv.insertBefore(videoEl, previewOff);
+        /* #27 — null guard: вставляем перед previewOff если он есть, иначе append */
+        if (previewOff) previewDiv.insertBefore(videoEl, previewOff);
+        else            previewDiv.appendChild(videoEl);
     }
-    previewOff.style.display = "none";
+    if (previewOff) previewOff.style.display = "none";
     videoEl.style.display = "";
 }
 function hideVideoPreview() {
     if (videoEl) videoEl.style.display = "none";
-    previewOff.style.display = "";
+    if (previewOff) previewOff.style.display = "";
 }
 
 function updateStatus() {
+    if (!statusEl) return;   /* null guard: statusEl может отсутствовать */
     if (micEnabled && camEnabled) statusEl.textContent = "✅ Всё готово! Камера и микрофон работают. Можете входить в конференцию.";
     else if (micEnabled)          statusEl.textContent = "✅ Микрофон включён — вас слышат. Камера выключена.";
     else if (camEnabled)          statusEl.textContent = "✅ Камера включена — вас видят. Микрофон выключен.";
@@ -177,7 +187,7 @@ function updateStatus() {
 }
 
 /* ── Кнопка микрофона ── */
-micBtn.onclick = async () => {
+if (micBtn) micBtn.onclick = async () => {   /* null guard */
     const ok = await ensureStream();
     if (!ok) return;
     micEnabled = !micEnabled;
@@ -189,27 +199,42 @@ micBtn.onclick = async () => {
 };
 
 /* ── Кнопка камеры ── */
-camBtn.onclick = async () => {
+if (camBtn) camBtn.onclick = async () => {   /* null guard */
     const ok = await ensureStream();
     if (!ok) return;
     camEnabled = !camEnabled;
-    localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
-    if (camEnabled) showVideoPreview();
-    else            hideVideoPreview();
+
+    if (!camEnabled) {
+        /* #30 — Останавливаем треки целиком → аппаратный индикатор камеры гаснет.
+           Просто t.enabled = false не гасит зелёный огонёк на macOS/Windows. */
+        localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
+        hideVideoPreview();
+    } else {
+        /* Камера снова включается — запрашиваем новый трек */
+        try {
+            const vs = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            vs.getVideoTracks().forEach(t => { t.enabled = true; localStream.addTrack(t); });
+            showVideoPreview();
+        } catch (e) {
+            camEnabled = false;
+            if (statusEl) statusEl.textContent = "⚠️ Не удалось включить камеру: " + e.message;
+        }
+    }
+
     updateCamBtn();
     updateStatus();
 };
 
 /* ── Войти в комнату ── */
-joinBtn.onclick = () => {
+if (joinBtn) joinBtn.onclick = () => {   /* null guard */
     /* Защита от двойного нажатия */
     if (joinBtn.disabled) return;
     joinBtn.disabled = true;
 
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     /* Закрываем AudioContext — прослушка остановлена, в комнате её нет */
-    if (audioCtx) { audioCtx.close(); audioCtx = null; }
-    const gain = micGainSlider.value;
+    if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; }  /* #29 — safe close */
+    const gain = micGainSlider?.value ?? 100;  /* #28 — null-safe value */
     window.location.href = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name.slice(0, 64))}&avatar=${encodeURIComponent(avatar)}&mic=${micEnabled ? 1 : 0}&cam=${camEnabled ? 1 : 0}&micGain=${gain}`;
 };
 

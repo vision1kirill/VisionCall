@@ -2,8 +2,13 @@ const msgInput = document.getElementById("msgInput");
 const sendBtn  = document.getElementById("sendBtn");
 const messages = document.getElementById("messages");
 
-let unreadCount  = 0;
-let chatIsOpen   = true; /* на десктопе сайдбар всегда видим */
+/* #31-33 — Null guards: если элементы не найдены, не регистрируем обработчики */
+if (!msgInput || !sendBtn || !messages) {
+    console.warn("chat.js: обязательные DOM-элементы не найдены, чат отключён");
+}
+
+let unreadCount = 0;
+/* #37 — chatIsOpen удалён: переменная никогда не обновлялась (dead code) */
 
 /* Проверяем, открыт ли сайдбар */
 function isChatVisible() {
@@ -14,19 +19,29 @@ function isChatVisible() {
     return isMobile ? sb.classList.contains("mobile-open") : true;
 }
 
-sendBtn.onclick = sendMessage;
-msgInput.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+if (sendBtn) sendBtn.onclick = sendMessage;
+if (msgInput) msgInput.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
 function sendMessage() {
+    if (!msgInput) return;
     const text = msgInput.value.trim();
     if (!text) return;
+    /* #34 — Не отправляем если сокет не подключён */
+    if (!socket.connected) {
+        console.warn("chat.js: сокет не подключён, сообщение не отправлено");
+        return;
+    }
     socket.emit("chat-message", { room, name, text });
     addMessage(name, text, true);
     msgInput.value = "";
 }
 
 socket.on("chat-message", data => {
-    addMessage(data.name, data.text, false);
+    /* #35-36 — Валидация входящих данных */
+    const author = String(data.name || "Участник").slice(0, 64);
+    const text   = String(data.text || "").slice(0, 2000);  /* #38 — cap length */
+    if (!text.trim()) return;
+    addMessage(author, text, false);
     /* Показываем бейдж непрочитанных если сайдбар закрыт */
     if (!isChatVisible()) {
         unreadCount++;
@@ -35,6 +50,7 @@ socket.on("chat-message", data => {
 });
 
 function addMessage(author, text, isSelf) {
+    if (!messages) return;   /* #33 — null guard: messages может отсутствовать */
     const div = document.createElement("div");
     div.className = "message" + (isSelf ? " message-self" : "");
 

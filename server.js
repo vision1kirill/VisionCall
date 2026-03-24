@@ -82,9 +82,12 @@ io.on("connection", socket => {
 
     /* ── Вход в комнату ── */
     socket.on("join-room", data => {
+        /* #68 — Защита от prototype pollution: data должен быть объектом */
+        if (!data || typeof data !== "object") return;
         const room   = sanitizeRoom(data.room);
-        const name   = String(data.name   || "Участник").slice(0, 64);
-        const avatar = String(data.avatar || "ironman").slice(0, 16);
+        /* #68b — Фильтруем управляющие символы из имени и аватара */
+        const name   = String(data.name   || "Участник").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 64) || "Участник";
+        const avatar = String(data.avatar || "ironman").replace(/[^\w]/g, "").slice(0, 16) || "ironman";
 
         if (!room) { socket.emit("room-error", "Неверный код комнаты"); return; }
 
@@ -127,6 +130,8 @@ io.on("connection", socket => {
     /* ── Signaling — все три события проверяют членство в одной комнате ── */
     socket.on("offer", data => {
         if (!data.to || !sameRoom(socket, data.to)) return;
+        /* #66 — Проверяем что offer является объектом с типом SDP */
+        if (!data.offer || typeof data.offer !== "object" || data.offer.type !== "offer") return;
         io.to(data.to).emit("offer", {
             offer:  data.offer,
             from:   socket.id,
@@ -137,12 +142,16 @@ io.on("connection", socket => {
 
     socket.on("answer", data => {
         if (!data.to || !sameRoom(socket, data.to)) return;
+        /* #67 — Проверяем что answer является объектом с типом SDP */
+        if (!data.answer || typeof data.answer !== "object" || data.answer.type !== "answer") return;
         io.to(data.to).emit("answer", { answer: data.answer, from: socket.id });
     });
 
     socket.on("ice-candidate", data => {
         if (!data.candidate) return;
         if (!data.to || !sameRoom(socket, data.to)) return;
+        /* #62 — Rate-limit: ICE может генерировать много кандидатов, допускаем 300/10сек */
+        if (!rateLimit(socket.id, "ice", 300, 10_000)) return;
         io.to(data.to).emit("ice-candidate", { candidate: data.candidate, from: socket.id });
     });
 
@@ -177,6 +186,9 @@ io.on("connection", socket => {
     socket.on("screen-share-state", data => {
         const room = socket.data.room;
         if (!room) return;
+        /* #63 — Rate-limit: 20 переключений за 10 сек */
+        if (!rateLimit(socket.id, "screen", 20, 10_000)) return;
+        /* #65 — Проверяем тип data.sharing */
         socket.to(room).emit("screen-share-state", {
             from:    socket.id,
             sharing: !!data.sharing
@@ -192,7 +204,16 @@ io.on("connection", socket => {
             const members = rooms.get(room);
             if (members) {
                 members.delete(socket.id);
-                if (members.size === 0) rooms.delete(room);
+                if (members.size === 0) {
+                    rooms.delete(room);
+                } else if (members._creator === socket.id) {
+                    /* #64 — Продвижение создателя: если создатель ушёл — назначаем
+                       первого оставшегося участника новым создателем комнаты. */
+                    const newCreatorId = members.keys().next().value;
+                    members._creator = newCreatorId;
+                    socket.to(room).emit("new-creator", { id: newCreatorId });
+                    console.log(`[creator] ${newCreatorId} is now creator of room=${room}`);
+                }
             }
             console.log(`[leave] ${socket.data.name || socket.id} ← room=${room}`);
         }

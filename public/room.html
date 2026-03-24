@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- #84 — theme-color для мобильного браузера -->
+<meta name="theme-color" content="#0f1117">
 <title>VisionCall</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="style.css">
@@ -19,7 +21,8 @@
     <span id="roomTitle"></span>
   </div>
 
-  <div></div>
+  <!-- #87 — aria-hidden: пустой div-заполнитель не несёт смысла для ридера -->
+  <div aria-hidden="true"></div>
 
 </div>
 
@@ -40,7 +43,8 @@
       <div id="messages"></div>
       <div class="chat-input">
         <label for="msgInput" class="sr-only">Введите сообщение</label>
-        <input id="msgInput" placeholder="Сообщение…" autocomplete="off" maxlength="2000">
+        <!-- #89 — enterkeyhint для быстрой отправки сообщения с мобильной клавиатуры -->
+        <input id="msgInput" placeholder="Сообщение…" autocomplete="off" maxlength="2000" enterkeyhint="send">
         <button id="sendBtn" aria-label="Отправить сообщение">
           <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>

@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- #84 — theme-color: цвет заголовка браузера на мобильных устройствах -->
+<meta name="theme-color" content="#0f1117">
 <title>VisionCall — Предпросмотр</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="style.css">
@@ -68,7 +70,8 @@
 
   </div>
 
-  <p class="lobby-status" id="lobbyStatus">Проверьте камеру и микрофон перед входом. Когда будете готовы — нажмите кнопку ниже.</p>
+  <!-- #77 — aria-live: скринридеры объявляют изменения статуса -->
+  <p class="lobby-status" id="lobbyStatus" aria-live="polite">Проверьте камеру и микрофон перед входом. Когда будете готовы — нажмите кнопку ниже.</p>
 
   <!-- Кнопка входа -->
   <button class="lobby-join-btn" id="lobbyJoinBtn">

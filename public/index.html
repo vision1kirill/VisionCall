@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- #84 — theme-color для мобильного браузера -->
+<meta name="theme-color" content="#0f1117">
 <title>VisionCall</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="style.css">
@@ -15,7 +17,8 @@
   <div class="logo-text">VisionCall</div>
 
   <!-- Онлайн-счётчик -->
-  <div class="online-counter-wrap">
+  <!-- #82 — aria-live: скринридеры объявляют изменения счётчика -->
+  <div class="online-counter-wrap" aria-live="polite" aria-atomic="true" aria-label="Пользователей онлайн">
     <div class="online-dot"></div>
     <div class="flip-counter" id="onlineFlipCounter">
       <span class="flip-digit"><span class="digit-val">0</span></span>
@@ -23,7 +26,8 @@
     <span class="online-label">онлайн</span>
   </div>
 
-  <input id="nickname" placeholder="Введите ваше имя" type="text" autocomplete="off" maxlength="64">
+  <!-- #89 — enterkeyhint подсказывает мобильной клавиатуре показывать «Перейти» вместо «Ввод» -->
+  <input id="nickname" placeholder="Введите ваше имя" type="text" autocomplete="off" maxlength="64" enterkeyhint="go" aria-label="Ваше имя">
   <p class="input-hint" id="nicknameHint">Пожалуйста, введите ваше имя — его увидят другие участники</p>
 
   <!-- Рандомный аватар + кубик -->
@@ -59,7 +63,7 @@
     <span id="roomCodeDisplay"></span>
   </div>
 
-  <input id="nicknameLink" placeholder="Введите ваше имя" type="text" autocomplete="off" maxlength="64">
+  <input id="nicknameLink" placeholder="Введите ваше имя" type="text" autocomplete="off" maxlength="64" enterkeyhint="go" aria-label="Ваше имя">
   <p class="input-hint" id="nicknameLinkHint">Пожалуйста, введите ваше имя — его увидят другие участники</p>
 
   <!-- Рандомный аватар + кубик -->
@@ -119,7 +123,8 @@ function rollDice(displayEl, labelEl, hiddenInputEl, btnEl) {
 
         if (count === total - 1) {
             if (labelEl) labelEl.textContent = window.AVATAR_LABELS?.[finalKey] || finalKey;
-            localStorage.setItem(AVATAR_SAVED_KEY, finalKey);
+            /* #80 — try-catch для localStorage */
+            try { localStorage.setItem(AVATAR_SAVED_KEY, finalKey); } catch (_) {}
             if (btnEl) btnEl.disabled = false;
             return;
         }
@@ -144,7 +149,9 @@ function initRandomAvatar(displayId, labelId, hiddenId, diceBtnId) {
     if (!displayEl || !hiddenEl || !window.AVATARS) return;
 
     /* Восстанавливаем сохранённый аватар или берём случайный */
-    const saved = localStorage.getItem(AVATAR_SAVED_KEY);
+    /* #80 — try-catch для localStorage */
+    let saved = null;
+    try { saved = localStorage.getItem(AVATAR_SAVED_KEY); } catch (_) {}
     const key   = (saved && window.AVATARS[saved]) ? saved : getRandomAvatarKey();
     setAvatar(displayEl, labelEl, hiddenEl, key);
 
@@ -158,7 +165,9 @@ initRandomAvatar("avatarDisplayLink", "avatarLabelLink", "avatarLink", "diceBtnL
 
 /* ── Запоминание ника (localStorage) ── */
 const NICK_KEY = "vc_nickname";
-const savedNick = localStorage.getItem(NICK_KEY);
+/* #79-80 — try-catch для localStorage: в Safari Private Mode/iframe он недоступен */
+let savedNick = null;
+try { savedNick = localStorage.getItem(NICK_KEY); } catch (_) {}
 if (savedNick) {
     document.getElementById("nickname").value     = savedNick;
     document.getElementById("nicknameLink").value = savedNick;
@@ -213,7 +222,8 @@ function getNickname(inputId) {
 function createRoom() {
     const name = getNickname("nickname");
     if (!name) return;
-    localStorage.setItem(NICK_KEY, name);
+    /* #79 — try-catch: localStorage.setItem бросает исключение в Private Mode */
+    try { localStorage.setItem(NICK_KEY, name); } catch (_) {}
     const avatar = document.getElementById("avatar").value;
     const room = generateCode();
     goToLobby(room, name, avatar);
@@ -223,7 +233,8 @@ function createRoom() {
 function joinViaLink() {
     const name = getNickname("nicknameLink");
     if (!name) return;
-    localStorage.setItem(NICK_KEY, name);
+    /* #79 — try-catch для localStorage */
+    try { localStorage.setItem(NICK_KEY, name); } catch (_) {}
     const avatar = document.getElementById("avatarLink").value;
     goToLobby(preRoom, name, avatar);
 }
@@ -275,7 +286,9 @@ function pollOnline() {
 /* Only poll on the home card page */
 if (!preRoom) {
     pollOnline();
-    setInterval(pollOnline, 6000);
+    /* #81 — Сохраняем ID интервала и очищаем при выгрузке страницы */
+    const pollIntervalId = setInterval(pollOnline, 6000);
+    window.addEventListener("pagehide", () => clearInterval(pollIntervalId), { once: true });
 }
 </script>
 

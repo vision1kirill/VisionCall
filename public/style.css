@@ -224,6 +224,12 @@ input[type="range"]::-moz-range-thumb {
     border: none;
     cursor: pointer;
 }
+/* #70 — Firefox range track: без этого правила трек отображается серым браузерным цветом */
+input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 4px;
+    background: var(--border2);
+}
 
 /* ═══════════════════════════════════════
    LOBBY PAGE
@@ -1177,6 +1183,26 @@ button:focus-visible,
 input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
+}
+
+/* #71 — touch-action: manipulation убирает задержку 300ms перед tap на мобильных браузерах */
+button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn, .dice-btn {
+    touch-action: manipulation;
+}
+
+/* #72 — Уважаем настройку «уменьшить анимацию» для пользователей с вестибулярными нарушениями */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .avatar-rolling { animation: none !important; }
+    .flip-digit.flipping { animation: none !important; }
+    .vc-toast { transition: none !important; }
 }
 
 /* ═══════════════════════════════════════

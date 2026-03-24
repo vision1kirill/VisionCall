@@ -4,8 +4,15 @@ const name     = params.get("name");
 const avatar   = params.get("avatar") || "ironman";
 const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
-const initGain = Math.max(0, Math.min(2, parseInt(params.get("micGain") || "100") / 100));
+/* #40 — NaN guard: parseInt("abc") = NaN → NaN/100 = NaN → Math.max/min пропускают NaN.
+   Добавляем || 100 чтобы получить безопасное значение по умолчанию. */
+const initGain = Math.max(0, Math.min(2, (parseInt(params.get("micGain") || "100") || 100) / 100));
 
+/* #39 — Без комнаты → на главную (name проверяется ниже) */
+if (!room) {
+    window.location.replace("/");
+    throw new Error("redirect");
+}
 /* Без имени → на главную */
 if (!name || name === "null") {
     window.location.replace(room ? `/?room=${encodeURIComponent(room)}` : "/");
@@ -51,7 +58,9 @@ const ICONS = {
 
 const socket = io();
 
-document.getElementById("roomTitle").textContent = room;
+/* #73 — null guard: roomTitle может отсутствовать в кастомных сборках */
+const roomTitleEl = document.getElementById("roomTitle");
+if (roomTitleEl) roomTitleEl.textContent = room;
 
 const videoGrid       = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
@@ -147,6 +156,8 @@ setInterval(ensureAudioCtxRunning, 30_000);
 
 /* Применяем усиление микрофона из лобби. */
 function buildGainedStream(rawStream, gain) {
+    /* #50 — Если нет аудио-треков — нет смысла строить граф */
+    if (!rawStream || rawStream.getAudioTracks().length === 0) return rawStream;
     try {
         const ctx  = getAudioCtx();
         const src  = ctx.createMediaStreamSource(rawStream);
@@ -156,9 +167,12 @@ function buildGainedStream(rawStream, gain) {
         const dest    = ctx.createMediaStreamDestination();
         src.connect(gn);
         gn.connect(dest);
+        /* #51 — Проверяем что dest.stream содержит трек перед созданием выходного потока */
+        const destTracks = dest.stream.getAudioTracks();
+        if (destTracks.length === 0) { micGainNode = null; return rawStream; }
         const out = new MediaStream();
         rawStream.getVideoTracks().forEach(t => out.addTrack(t));
-        dest.stream.getAudioTracks().forEach(t => out.addTrack(t));
+        destTracks.forEach(t => out.addTrack(t));
         return out;
     } catch (e) {
         micGainNode = null;
@@ -383,6 +397,7 @@ function removeVideoBox(id) {
 
 /* ── Динамическая сетка ── */
 function updateGridLayout() {
+    if (!videoGrid) return;   /* #77 — null guard */
     const count = videoGrid.querySelectorAll(".video-box").length;
     if (count <= 1) {
         videoGrid.style.gridTemplateColumns = "1fr";
@@ -405,6 +420,8 @@ function updateGridLayout() {
 ════════════════════════════════════════════ */
 function monitorSpeaking(id, stream) {
     if (speakingCancels[id]) { speakingCancels[id](); }
+    /* #78 — Без аудио-треков анализатор бесполезен и может вызвать ошибку в Safari */
+    if (!stream || stream.getAudioTracks().length === 0) return;
 
     try {
         const ctx      = getAudioCtx();
@@ -590,7 +607,8 @@ function addTrackToPeers(track, stream) {
     for (const [, pc] of Object.entries(peerConnections)) {
         const existing = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
         if (existing) {
-            existing.replaceTrack(track).catch(() => {});
+            /* #41 — Логируем ошибку replaceTrack вместо молчаливого проглатывания */
+            existing.replaceTrack(track).catch(e => console.warn("replaceTrack failed:", e));
         } else {
             pc.addTrack(track, stream);
         }
@@ -625,9 +643,9 @@ function showRemoteScreenAudio(id, stream) {
         const slider = panel.querySelector(".rsa-slider");
         const valEl  = panel.querySelector(".screen-audio-value");
         slider.oninput = function () {
-            const pct = parseInt(this.value);
+            const pct = parseInt(this.value) || 0;  /* #44 — NaN guard */
             valEl.textContent = pct + "%";
-            audio.volume = pct / 100;
+            audio.volume = Math.max(0, Math.min(1, pct / 100));  /* #44b — clamp volume */
         };
         remoteScreenAudioEls[id] = { audio, panel };
     } else {
@@ -653,6 +671,8 @@ function createPeer(id) {
 
     pc.onnegotiationneeded = async () => {
         if (makingOffer[id]) return;
+        /* #75 — Не начинаем negotiation если PC уже закрыт */
+        if (pc.signalingState === "closed") return;
         try {
             makingOffer[id] = true;
             const offer = await pc.createOffer();
@@ -728,7 +748,8 @@ function createPeer(id) {
             }
         }
 
-        if (state === "failed") pc.restartIce();
+        /* #76 — Проверяем что PC не закрыт перед restartIce (иначе DOMException) */
+    if (state === "failed" && pc.signalingState !== "closed") pc.restartIce();
         /* Проверяем что этот PC всё ещё «текущий» для данного peer-а,
            чтобы stale-ивент закрытого старого соединения не убрал новый бокс. */
         if (state === "closed" && peerConnections[id] === pc) removeVideoBox(id);
@@ -745,7 +766,8 @@ async function flushCandidates(id) {
     if (!pc || !queue) return;
     delete pendingCandidates[id];
     for (const c of queue) {
-        try { await pc.addIceCandidate(c); } catch (e) {}
+        /* #42 — Логируем ошибки addIceCandidate (помогает при отладке ICE) */
+        try { await pc.addIceCandidate(c); } catch (e) { console.warn("flushCandidates addIceCandidate:", e); }
     }
 }
 
@@ -876,6 +898,8 @@ socket.on("room-users", data => {
 });
 
 socket.on("user-connected", async data => {
+    /* #59 — Null check: data.id обязателен для создания peer connection */
+    if (!data.id) return;
     showToast(`👋 ${data.name || "Участник"} присоединился к конференции`, "info", 4000);
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "ironman" };
     addParticipant(data.id, data.name, data.avatar || "ironman", data.id === roomCreatorId);
@@ -931,6 +955,8 @@ socket.on("user-connected", async data => {
 });
 
 socket.on("offer", async data => {
+    /* #60 — Null check: data.offer обязателен для setRemoteDescription */
+    if (!data.from || !data.offer) return;
     if (data.name) {
         peerMeta[data.from] = { name: data.name, avatar: data.avatar || "ironman" };
         if (!document.getElementById("box-" + data.from)) {
@@ -973,6 +999,8 @@ socket.on("offer", async data => {
 });
 
 socket.on("answer", async data => {
+    /* #61 — Null check: data.answer обязателен для setRemoteDescription */
+    if (!data.from || !data.answer) return;
     const pc = peerConnections[data.from];
     if (pc && pc.signalingState === "have-local-offer") {
         try {
@@ -987,10 +1015,21 @@ socket.on("ice-candidate", async data => {
     const pc = peerConnections[data.from];
     if (!pc) return;
     if (pc.remoteDescription && pc.remoteDescription.type) {
-        try { await pc.addIceCandidate(data.candidate); } catch (e) {}
+        /* #43 — Логируем ошибку addIceCandidate (silent fail скрывал ICE-проблемы) */
+        try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn("addIceCandidate:", e); }
     } else {
         if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
         pendingCandidates[data.from].push(data.candidate);
+        /* #48 — Защита от утечки памяти: чистим очередь если remoteDescription
+           так и не установился в течение 30 сек (например, peer отключился). */
+        if (pendingCandidates[data.from].length === 1) {
+            setTimeout(() => {
+                if (pendingCandidates[data.from]) {
+                    console.warn("pendingCandidates cleanup for", data.from);
+                    delete pendingCandidates[data.from];
+                }
+            }, 30_000);
+        }
     }
 });
 
@@ -998,6 +1037,16 @@ socket.on("user-disconnected", data => {
     const leaveName = peerMeta[data.id]?.name || "Участник";
     showToast(`${leaveName} покинул конференцию`, "info", 4000);
     removeVideoBox(data.id);
+});
+
+/* #64 — Обновляем корону при смене создателя комнаты */
+socket.on("new-creator", data => {
+    if (!data.id) return;
+    roomCreatorId = data.id;
+    /* Убираем корону у всех участников */
+    document.querySelectorAll(".participant-crown").forEach(c => c.remove());
+    /* Ставим корону новому создателю */
+    setCreatorCrown(data.id === socket.id ? "local" : data.id);
 });
 
 socket.on("screen-share-state", data => {
@@ -1028,9 +1077,9 @@ socket.on("screen-share-state", data => {
             const slider = panel.querySelector(".rsa-slider");
             const valEl  = panel.querySelector(".screen-audio-value");
             slider.oninput = function () {
-                const pct = parseInt(this.value);
+                const pct = parseInt(this.value) || 0;  /* #45 — NaN guard */
                 valEl.textContent = pct + "%";
-                const vol = pct / 100;
+                const vol = Math.max(0, Math.min(1, pct / 100));  /* #45b — clamp volume */
                 /* Управляем громкостью: video-элемент или скрытый audio */
                 const v = box.querySelector("video");
                 if (v) v.volume = vol;
@@ -1063,12 +1112,13 @@ socket.on("media-state", data => updateLabelIcons(data.from, data.mic, data.cam)
    КНОПКА МИКРОФОН
 ════════════════════════════════════════════ */
 function setMicIcon() {
+    if (!micBtn) return;   /* #54 — null guard */
     micBtn.innerHTML = micEnabled ? ICONS.micOn : ICONS.micOff;
     micBtn.className = micEnabled ? "btn-active" : "btn-inactive";
     micBtn.setAttribute("aria-label", micEnabled ? "Выключить микрофон" : "Включить микрофон");
     micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
 }
-micBtn.onclick = async () => {
+if (micBtn) micBtn.onclick = async () => {   /* #56 — null guard */
     if (!localStream) { await startCamera(); if (!localStream) return; }
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => {
@@ -1087,12 +1137,13 @@ micBtn.onclick = async () => {
    КНОПКА КАМЕРА
 ════════════════════════════════════════════ */
 function setCamIcon() {
+    if (!camBtn) return;   /* #55 — null guard */
     camBtn.innerHTML = camEnabled ? ICONS.camOn : ICONS.camOff;
     camBtn.className = camEnabled ? "btn-active" : "btn-inactive";
     camBtn.setAttribute("aria-label", camEnabled ? "Выключить камеру" : "Включить камеру");
     camBtn.setAttribute("aria-pressed", camEnabled ? "true" : "false");
 }
-camBtn.onclick = async () => {
+if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
     if (!localStream) { await startCamera(); if (!localStream) return; }
     camEnabled = !camEnabled;
 
@@ -1145,6 +1196,7 @@ if (flipBtn) { flipBtn.onclick = () => switchCamera(); }
    ДЕМОНСТРАЦИЯ ЭКРАНА
 ════════════════════════════════════════════ */
 function setScreenIcon() {
+    if (!screenBtn) return;   /* #52 — null guard */
     screenBtn.innerHTML = screenEnabled ? ICONS.screenOn : ICONS.screenOff;
     screenBtn.className = screenEnabled ? "btn-screen-active" : "";
     screenBtn.setAttribute("aria-label", screenEnabled ? "Остановить демонстрацию экрана" : "Начать демонстрацию экрана");
@@ -1171,13 +1223,16 @@ function showScreenAudioPanel() {
             <label class="sr-only" for="screenAudioSlider">Уровень звука экрана для участников</label>
             <input id="screenAudioSlider" type="range" min="0" max="100" value="100" step="5">
             <span class="screen-audio-value" id="screenAudioValue">100%</span>`;
-        document.querySelector(".controls").prepend(panel);
+        /* #74 — null guard: .controls может отсутствовать */
+        const controlsEl = document.querySelector(".controls");
+        if (!controlsEl) { panel.style.display = "none"; return; }
+        controlsEl.prepend(panel);
         document.getElementById("screenAudioSlider").oninput = function () {
-            const pct = parseInt(this.value);
+            const pct = parseInt(this.value) || 0;  /* #46 — NaN guard */
             document.getElementById("screenAudioValue").textContent = pct + "%";
             /* Управляем уровнем звука экрана в WebAudio-миксе для собеседников */
             if (screenAudioMix?.screenGain) {
-                screenAudioMix.screenGain.gain.value = pct / 100;
+                screenAudioMix.screenGain.gain.value = Math.max(0, pct / 100);  /* #46b — non-negative */
             }
         };
     }
@@ -1192,7 +1247,7 @@ function hideScreenAudioPanel() {
     if (panel) panel.style.display = "none";
 }
 
-screenBtn.onclick = async () => {
+if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
     if (screenEnabled) {
         /* ── Остановка демонстрации ── */
         screenStream?.getTracks().forEach(t => t.stop());
@@ -1311,7 +1366,8 @@ screenBtn.onclick = async () => {
         }
 
         showVideoInBox("local", screenStream, true, true);
-        screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
+        /* #47 — Optional chaining: screenBtn может не существовать */
+        screenTrack.onended = () => { if (screenEnabled) screenBtn?.click(); };
     } catch (e) {
         if (e.name === "NotAllowedError") {
             showToast("Демонстрация экрана отменена.", "info", 3000);
@@ -1324,7 +1380,7 @@ screenBtn.onclick = async () => {
 /* ════════════════════════════════════════════
    ВЫХОД — с подтверждением
 ════════════════════════════════════════════ */
-leaveBtn.onclick = () => {
+if (leaveBtn) leaveBtn.onclick = () => {  /* #53 — null guard */
     if (!confirm("Вы уверены, что хотите покинуть конференцию?\n\nВы выйдете из звонка и вернётесь на главную страницу.")) return;
     /* Останавливаем все speaking-мониторы */
     Object.keys(speakingCancels).forEach(id => { speakingCancels[id]?.(); });
