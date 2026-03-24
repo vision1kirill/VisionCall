@@ -100,6 +100,24 @@ let _joined = false;
 /* ── Флаг активного переподключения (для тоста «восстановлено») ── */
 let _reconnecting = false;
 
+/* ── Отслеживаем кто из удалённых участников сейчас шарит экран ── */
+const screenSharingPeers = new Set();
+
+/* ── Чёрный canvas-трек (заглушка для видео-сендера при выключенной камере).
+   Держим аппаратный индикатор (зелёный огонёк) выключенным: macOS/Win
+   зажигают его только когда трек getUserMedia живёт (readyState="live"). ── */
+let _blackCanvas = null;
+let _blackTrack  = null;
+function getBlackVideoTrack() {
+    if (_blackTrack && _blackTrack.readyState === "live") return _blackTrack;
+    if (!_blackCanvas) {
+        _blackCanvas = Object.assign(document.createElement("canvas"), { width: 2, height: 2 });
+        _blackCanvas.getContext("2d").fillRect(0, 0, 2, 2);
+    }
+    _blackTrack = _blackCanvas.captureStream(1).getVideoTracks()[0];
+    return _blackTrack;
+}
+
 /* ── AudioContext ── */
 let audioCtx    = null;
 let micGainNode = null;
@@ -332,6 +350,7 @@ function ensureRemoteAudio(id, stream) {
 }
 
 function removeVideoBox(id) {
+    screenSharingPeers.delete(id);
     /* Останавливаем speaking monitor */
     if (speakingCancels[id]) { speakingCancels[id](); delete speakingCancels[id]; }
     /* Убираем speaking-таймер */
@@ -530,7 +549,13 @@ async function startCamera(facing) {
         }
         localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
         localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-        localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+        if (!camEnabled) {
+            /* Камера изначально выключена — сразу останавливаем видео-треки,
+               чтобы не горел аппаратный индикатор камеры. */
+            localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
+        } else {
+            localStream.getVideoTracks().forEach(t => t.enabled = true);
+        }
     } finally {
         cameraStarting = false;
     }
@@ -649,17 +674,31 @@ function createPeer(id) {
         }
 
         if (e.track.kind === "video") {
+            /* Пропускаем чёрный canvas-трек (заглушка выключенной камеры) */
+            if (e.track.label === "" || (e.streams[0] && e.streams[0].getVideoTracks().length === 0)) {
+                showAvatarInBox(id, meta.avatar);
+                return;
+            }
             showVideoInBox(id, e.streams[0], false, false);
             monitorSpeaking(id, e.streams[0]);
+            /* Убираем audio-only элемент: теперь аудио воспроизводит <video muted=false> */
+            if (peerAudioEls[id]) {
+                peerAudioEls[id].srcObject = null;
+                peerAudioEls[id].remove();
+                delete peerAudioEls[id];
+            }
         } else if (e.track.kind === "audio") {
             const box          = document.getElementById("box-" + id);
             const existingVideo = box?.querySelector("video");
             if (!existingVideo) {
+                /* Камера выключена (или видео ещё не пришло) — нужен отдельный <audio> */
                 ensureRemoteAudio(id, e.streams[0]);
                 monitorSpeaking(id, e.streams[0]);
-            } else if (existingVideo.srcObject !== e.streams[0]) {
+            } else if (screenSharingPeers.has(id) && existingVideo.srcObject !== e.streams[0]) {
+                /* Аудио экрана пришло через addTrack (отдельный поток) — только для реальных шеров */
                 showRemoteScreenAudio(id, e.streams[0]);
             }
+            /* В остальных случаях аудио воспроизводит уже существующий <video> или <audio> */
         }
     };
 
@@ -690,7 +729,9 @@ function createPeer(id) {
         }
 
         if (state === "failed") pc.restartIce();
-        if (state === "closed") removeVideoBox(id);
+        /* Проверяем что этот PC всё ещё «текущий» для данного peer-а,
+           чтобы stale-ивент закрытого старого соединения не убрал новый бокс. */
+        if (state === "closed" && peerConnections[id] === pc) removeVideoBox(id);
     };
 
     peerConnections[id] = pc;
@@ -761,6 +802,7 @@ socket.on("connect", () => {
         Object.keys(peerMeta).forEach(id => delete peerMeta[id]);
         Object.keys(makingOffer).forEach(id => delete makingOffer[id]);
         Object.keys(pendingCandidates).forEach(id => delete pendingCandidates[id]);
+        screenSharingPeers.clear();
         roomCreatorId = null;
         updateGridLayout();
 
@@ -846,6 +888,11 @@ socket.on("user-connected", async data => {
             if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
         });
     }
+    /* Если камера выключена, добавляем чёрный трек чтобы видео-сендер существовал
+       и у собеседника был корректный видео-слот (включим камеру — просто replaceTrack) */
+    if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
+        pc.addTrack(getBlackVideoTrack(), localStream || new MediaStream());
+    }
     if (screenEnabled && screenStream) {
         /* Видео экрана: заменяем видео-сендер (replaceTrack, без renegotiation) */
         const screenTrack = screenStream.getVideoTracks()[0];
@@ -909,6 +956,10 @@ socket.on("offer", async data => {
             if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
         });
     }
+    /* Если камера выключена, добавляем чёрный трек чтобы видео-сендер существовал */
+    if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
+        pc.addTrack(getBlackVideoTrack(), localStream || new MediaStream());
+    }
 
     try {
         await pc.setRemoteDescription(data.offer);
@@ -956,6 +1007,7 @@ socket.on("screen-share-state", data => {
     if (vid) vid.classList.toggle("screen-video", data.sharing);
 
     if (data.sharing) {
+        screenSharingPeers.add(data.from);
         const sharerName = peerMeta[data.from]?.name || "Участник";
         showToast(`🖥 ${sharerName} начал демонстрацию экрана`, "info", 4000);
         /* Показываем слайдер громкости звука экрана для зрителей.
@@ -986,6 +1038,7 @@ socket.on("screen-share-state", data => {
             };
         }
     } else {
+        screenSharingPeers.delete(data.from);
         /* Убираем слайдер громкости и любые устаревшие элементы screen audio */
         box.querySelector(".rsa-viewer-panel")?.remove();
         removeRemoteScreenAudio(data.from);
@@ -1042,18 +1095,44 @@ function setCamIcon() {
 camBtn.onclick = async () => {
     if (!localStream) { await startCamera(); if (!localStream) return; }
     camEnabled = !camEnabled;
-    localStream.getVideoTracks().forEach(t => {
-        t.enabled = camEnabled;
-        /* Не заменяем видео-сендер если демонстрация экрана активна —
-           иначе собеседники потеряют экран и увидят камеру. */
-        if (!screenEnabled) addTrackToPeers(t, localStream);
-    });
+
+    if (!camEnabled) {
+        /* ── Выключаем камеру: останавливаем трек, гасим аппаратный индикатор ── */
+        localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
+        if (!screenEnabled) {
+            /* Заменяем на чёрный canvas-трек — сендер остаётся живым без renegotiation */
+            const blackTrack = getBlackVideoTrack();
+            for (const [, pc] of Object.entries(peerConnections)) {
+                const s = pc.getSenders().find(s => s.track?.kind === "video");
+                if (s) s.replaceTrack(blackTrack).catch(() => {});
+            }
+        }
+    } else {
+        /* ── Включаем камеру: запрашиваем новый трек через getUserMedia ── */
+        try {
+            const ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+            const newTrack = ns.getVideoTracks()[0];
+            if (newTrack) {
+                newTrack.enabled = true;
+                localStream.addTrack(newTrack);
+                if (!screenEnabled) {
+                    for (const [, pc] of Object.entries(peerConnections)) {
+                        const s = pc.getSenders().find(s => s.track?.kind === "video");
+                        if (s) s.replaceTrack(newTrack).catch(() => {});
+                        else   pc.addTrack(newTrack, localStream);
+                    }
+                }
+            }
+        } catch (e) {
+            camEnabled = false;
+            showToast("Не удалось включить камеру: " + e.message, "error");
+        }
+    }
+
     setCamIcon();
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
-    /* Кнопка перевёртки камеры видна только если камера включена и нет screen share */
     if (flipBtn) flipBtn.style.display = (camEnabled && !screenEnabled) ? "" : "none";
-    /* Обновляем локальный бокс только если screen share не активен */
     if (!screenEnabled) {
         if (camEnabled) showVideoInBox("local", localStream, true, false);
         else            showAvatarInBox("local", avatar);
@@ -1140,13 +1219,20 @@ screenBtn.onclick = async () => {
             }
         }
 
-        /* Возвращаем видео-трек камеры */
+        /* Возвращаем видео-трек камеры (или чёрный трек если камера выключена) */
         if (localStream) {
             const camTrack = localStream.getVideoTracks()[0];
             if (camTrack) {
                 for (const [, pc] of Object.entries(peerConnections)) {
                     const s = pc.getSenders().find(s => s.track?.kind === "video");
                     if (s) s.replaceTrack(camTrack).catch(() => {});
+                }
+            } else if (!camEnabled) {
+                /* Камера выключена — ставим обратно чёрный трек чтобы сендер остался */
+                const blackTrack = getBlackVideoTrack();
+                for (const [, pc] of Object.entries(peerConnections)) {
+                    const s = pc.getSenders().find(s => s.track?.kind === "video");
+                    if (s) s.replaceTrack(blackTrack).catch(() => {});
                 }
             }
         }
