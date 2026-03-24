@@ -516,22 +516,24 @@ async function startCamera(facing) {
     const mode = facing || facingMode;
     let rawStream;
     try {
-        rawStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: mode }, audio: true
-        });
-    } catch (_) {
         try {
-            rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        } catch (e) {
-            showToast("Браузер заблокировал доступ к камере или микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
-            cameraStarting = false;
-            return;
+            rawStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: mode }, audio: true
+            });
+        } catch (_) {
+            try {
+                rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } catch (e) {
+                showToast("Браузер заблокировал доступ к камере или микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
+                return;
+            }
         }
+        localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
+        localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+        localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+    } finally {
+        cameraStarting = false;
     }
-    localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
-    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-    localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
-    cameraStarting = false;
 }
 
 /* ── Переключение фронтальной / задней камеры ── */
@@ -544,7 +546,7 @@ async function switchCamera() {
         });
         const newTrack = newStream.getVideoTracks()[0];
         newTrack.enabled = true;
-        const oldTrack = localStream?.getVideoTracks()[0];
+        const oldTrack = localStream?.getVideoTracks()?.[0];
         if (oldTrack) { oldTrack.stop(); localStream.removeTrack(oldTrack); }
         localStream.addTrack(newTrack);
         for (const [, pc] of Object.entries(peerConnections)) {
@@ -1215,6 +1217,7 @@ screenBtn.onclick = async () => {
                 }
             } catch (e) {
                 console.warn("Screen audio mix failed:", e);
+                showToast("Не удалось подмешать аудио экрана — звук демонстрации недоступен собеседникам.", "error", 6000);
                 /* Fallback: просто не передаём аудио экрана — зато не ломаем соединение */
             }
 

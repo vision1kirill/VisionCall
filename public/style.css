@@ -581,6 +581,7 @@ body.lobby-page {
 }
 
 /* scrollbar styling */
+.video-grid { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
 .video-grid::-webkit-scrollbar { width: 4px; }
 .video-grid::-webkit-scrollbar-track { background: transparent; }
 .video-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }

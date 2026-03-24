@@ -170,8 +170,6 @@ if (savedNick) {
     if (!el) return;
     el.oninput = () => {
         el.classList.remove("input-error");
-        const hint = document.getElementById(id + "Hint") || document.getElementById(id.replace("nickname","nicknameHint").replace("nicknameLink","nicknameLinkHint"));
-        /* Ищем по следующему сиблингу */
         const hintEl = el.nextElementSibling;
         if (hintEl && hintEl.classList.contains("input-hint")) hintEl.style.display = "none";
     };

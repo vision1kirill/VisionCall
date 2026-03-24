@@ -76,6 +76,7 @@ function updateCamBtn() {
 /* ── Шкала громкости + прослушка своего голоса ── */
 function startMeter(stream) {
     try {
+        if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
         if (audioCtx) audioCtx.close();
         audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioCtx.createMediaStreamSource(stream);

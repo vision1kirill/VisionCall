@@ -141,6 +141,7 @@ io.on("connection", socket => {
     });
 
     socket.on("ice-candidate", data => {
+        if (!data.candidate) return;
         if (!data.to || !sameRoom(socket, data.to)) return;
         io.to(data.to).emit("ice-candidate", { candidate: data.candidate, from: socket.id });
     });
@@ -219,6 +220,8 @@ function gracefulShutdown(signal) {
     console.log(`[${signal}] Graceful shutdown initiated...`);
     /* Уведомляем всех участников */
     io.emit("server-shutdown");
+    /* Закрываем все сокет-соединения, чтобы server.close() завершился быстрее */
+    io.disconnectSockets(true);
     server.close(() => {
         console.log("HTTP server closed.");
         process.exit(0);
