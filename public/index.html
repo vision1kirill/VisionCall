@@ -23,7 +23,8 @@
     <span class="online-label">онлайн</span>
   </div>
 
-  <input id="nickname" placeholder="Ваш никнейм" type="text" autocomplete="off" maxlength="64">
+  <input id="nickname" placeholder="Введите ваше имя" type="text" autocomplete="off" maxlength="64">
+  <p class="input-hint" id="nicknameHint">Пожалуйста, введите ваше имя — его увидят другие участники</p>
 
   <!-- Рандомный аватар + кубик -->
   <div class="avatar-random-section">
@@ -58,7 +59,8 @@
     <span id="roomCodeDisplay"></span>
   </div>
 
-  <input id="nicknameLink" placeholder="Ваш никнейм" type="text" autocomplete="off" maxlength="64">
+  <input id="nicknameLink" placeholder="Введите ваше имя" type="text" autocomplete="off" maxlength="64">
+  <p class="input-hint" id="nicknameLinkHint">Пожалуйста, введите ваше имя — его увидят другие участники</p>
 
   <!-- Рандомный аватар + кубик -->
   <div class="avatar-random-section">
@@ -73,7 +75,7 @@
 
   <button class="join-btn" onclick="joinViaLink()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-    Перейти к предпросмотру
+    Войти в конференцию
   </button>
 
 </div>
@@ -162,6 +164,19 @@ if (savedNick) {
     document.getElementById("nicknameLink").value = savedNick;
 }
 
+/* ── Сброс ошибки при вводе ── */
+["nickname", "nicknameLink"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.oninput = () => {
+        el.classList.remove("input-error");
+        const hint = document.getElementById(id + "Hint") || document.getElementById(id.replace("nickname","nicknameHint").replace("nicknameLink","nicknameLinkHint"));
+        /* Ищем по следующему сиблингу */
+        const hintEl = el.nextElementSibling;
+        if (hintEl && hintEl.classList.contains("input-hint")) hintEl.style.display = "none";
+    };
+});
+
 /* ── Определяем режим: обычный или по ссылке ── */
 const urlParams = new URLSearchParams(window.location.search);
 const preRoom = urlParams.get("room");
@@ -181,8 +196,18 @@ function generateCode() {
 }
 
 function getNickname(inputId) {
-    const name = document.getElementById(inputId).value.trim();
-    if (!name) { alert("Введите никнейм"); return null; }
+    const input = document.getElementById(inputId);
+    const name  = input.value.trim();
+    if (!name) {
+        input.classList.add("input-error");
+        input.focus();
+        const hintEl = input.nextElementSibling;
+        if (hintEl && hintEl.classList.contains("input-hint")) {
+            hintEl.style.display = "block";
+        }
+        return null;
+    }
+    input.classList.remove("input-error");
     return name;
 }
 

@@ -23,7 +23,7 @@
   <div class="lobby-preview" id="lobbyPreview">
     <div class="lobby-preview-off" id="previewOff">
       <div class="big-avatar" id="previewAvatar"></div>
-      <p>Камера выключена</p>
+      <p>Камера выключена — нажмите кнопку ниже, чтобы включить</p>
     </div>
     <!-- видео вставляется через JS -->
   </div>
@@ -52,7 +52,7 @@
     </div>
 
     <div class="gain-row">
-      <span class="gain-label">Громкость входа</span>
+      <span class="gain-label">Громкость микрофона</span>
       <div class="gain-slider-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="gain-icon"><line x1="4" y1="12" x2="12" y2="12"/><line x1="18" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="3"/></svg>
         <input type="range" id="micGainSlider" min="0" max="200" value="100" step="5">
@@ -63,12 +63,12 @@
     <!-- Подсказка про наушники — показывается когда микрофон включён -->
     <div class="earphone-hint" id="earphoneHint" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-      Вы слышите свой голос — так звучите для других. Рекомендуются наушники.
+      Вы слышите свой голос — именно так вас слышат другие участники. Рекомендуется использовать наушники, чтобы избежать эха.
     </div>
 
   </div>
 
-  <p class="lobby-status" id="lobbyStatus">Настройте камеру и микрофон перед входом в комнату.</p>
+  <p class="lobby-status" id="lobbyStatus">Проверьте камеру и микрофон перед входом. Когда будете готовы — нажмите кнопку ниже.</p>
 
   <!-- Кнопка входа -->
   <button class="lobby-join-btn" id="lobbyJoinBtn">

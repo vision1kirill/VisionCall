@@ -142,7 +142,7 @@ async function ensureStream() {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             } catch (e2) {
-                statusEl.textContent = "Нет доступа к камере/микрофону.";
+                statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
                 return false;
             }
         }
@@ -169,10 +169,10 @@ function hideVideoPreview() {
 }
 
 function updateStatus() {
-    if (micEnabled && camEnabled) statusEl.textContent = "Готово — камера и микрофон включены.";
-    else if (micEnabled)          statusEl.textContent = "Микрофон включён. Камера выключена.";
-    else if (camEnabled)          statusEl.textContent = "Камера включена. Микрофон выключен.";
-    else                          statusEl.textContent = "Камера и микрофон выключены.";
+    if (micEnabled && camEnabled) statusEl.textContent = "✅ Всё готово! Камера и микрофон работают. Можете входить в конференцию.";
+    else if (micEnabled)          statusEl.textContent = "✅ Микрофон включён — вас слышат. Камера выключена.";
+    else if (camEnabled)          statusEl.textContent = "✅ Камера включена — вас видят. Микрофон выключен.";
+    else                          statusEl.textContent = "Проверьте камеру и микрофон перед входом. Когда будете готовы — нажмите кнопку ниже.";
 }
 
 /* ── Кнопка микрофона ── */

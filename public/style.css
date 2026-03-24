@@ -1129,6 +1129,34 @@ body.home .vc-toast {
 }
 
 /* ═══════════════════════════════════════
+   ВАЛИДАЦИЯ ПОЛЕЙ ВВОДА (главная страница)
+═══════════════════════════════════════ */
+input.input-error {
+    border-color: rgba(239, 68, 68, 0.7) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+    animation: shake 0.35s ease;
+}
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+}
+.input-hint {
+    font-size: 13px;
+    color: #ef4444;
+    margin: -8px 0 8px 0;
+    display: none;
+    text-align: center;
+    animation: fadeInDown 0.2s ease;
+}
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════
    СОСТОЯНИЕ DISABLED У КНОПОК
 ═══════════════════════════════════════ */
 .lobby-join-btn:disabled {

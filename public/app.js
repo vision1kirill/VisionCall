@@ -15,7 +15,7 @@ if (!name || name === "null") {
 /* ════════════════════════════════════════════
    TOAST — заменяет все alert()
 ════════════════════════════════════════════ */
-function showToast(msg, type = "error") {
+function showToast(msg, type = "error", duration = 5000) {
     /* Убираем предыдущий тост того же типа */
     document.querySelectorAll(".vc-toast").forEach(t => t.remove());
     const t = document.createElement("div");
@@ -28,7 +28,7 @@ function showToast(msg, type = "error") {
     setTimeout(() => {
         t.classList.remove("vc-toast-show");
         setTimeout(() => t.remove(), 300);
-    }, 5000);
+    }, duration);
 }
 
 /* ════════════════════════════════════════════
@@ -97,6 +97,8 @@ const reconnectTimers = {};
 
 /* ── Флаг первого подключения (для разграничения connect / reconnect) ── */
 let _joined = false;
+/* ── Флаг активного переподключения (для тоста «восстановлено») ── */
+let _reconnecting = false;
 
 /* ── AudioContext ── */
 let audioCtx    = null;
@@ -473,6 +475,7 @@ if (copyBtn) {
             copyBtn.innerHTML = ICONS.copied;
             copyBtn.setAttribute("aria-label", "Ссылка скопирована");
             copyBtn.classList.add("copy-success");
+            showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
             restore();
         }).catch(() => {
             try {
@@ -481,9 +484,10 @@ if (copyBtn) {
                 document.execCommand("copy"); inp.remove();
                 copyBtn.innerHTML = ICONS.copied;
                 copyBtn.classList.add("copy-success");
+                showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
                 restore();
             } catch (_) {
-                showToast("Не удалось скопировать ссылку", "error");
+                showToast("Не удалось скопировать ссылку автоматически. Скопируйте адрес из строки браузера вручную.", "error");
             }
         });
     };
@@ -519,7 +523,7 @@ async function startCamera(facing) {
         try {
             rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         } catch (e) {
-            showToast("Нет доступа к камере/микрофону: " + e.message, "error");
+            showToast("Браузер заблокировал доступ к камере или микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
             cameraStarting = false;
             return;
         }
@@ -712,7 +716,8 @@ async function flushCandidates(id) {
 socket.on("connect", () => {
     if (_joined) {
         /* ── Переподключение после разрыва ── */
-        showToast("Переподключение к комнате…", "info");
+        _reconnecting = true;
+        showToast("Соединение прервано. Выполняется переподключение к конференции…", "error", 10000);
 
         /* Останавливаем демонстрацию экрана (getDisplayMedia нельзя продолжить) */
         if (screenEnabled) {
@@ -773,7 +778,7 @@ socket.on("connect", () => {
 socket.on("disconnect", reason => {
     if (reason !== "io client disconnect") {
         /* io client disconnect = пользователь сам нажал «Выйти», не показываем тост */
-        showToast("Соединение прервано. Переподключение…", "error");
+        showToast("Соединение прервано. Переподключение…", "error", 10000);
     }
 });
 
@@ -795,6 +800,12 @@ socket.on("server-shutdown", () => {
 });
 
 socket.on("room-users", data => {
+    /* Если это переподключение — сообщаем об успехе */
+    if (_reconnecting) {
+        showToast("✅ Подключение восстановлено! Вы снова в конференции.", "success", 4000);
+        _reconnecting = false;
+    }
+
     /* Поддержка старого формата (массив) и нового ({ users, creatorId }) */
     const users     = Array.isArray(data) ? data : (data.users || []);
     const creatorId = Array.isArray(data) ? null : (data.creatorId || null);
@@ -821,6 +832,7 @@ socket.on("room-users", data => {
 });
 
 socket.on("user-connected", async data => {
+    showToast(`👋 ${data.name || "Участник"} присоединился к конференции`, "info", 4000);
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "ironman" };
     addParticipant(data.id, data.name, data.avatar || "ironman", data.id === roomCreatorId);
     createVideoBox(data.id, data.name, data.avatar || "ironman");
@@ -929,7 +941,11 @@ socket.on("ice-candidate", async data => {
     }
 });
 
-socket.on("user-disconnected", data => removeVideoBox(data.id));
+socket.on("user-disconnected", data => {
+    const leaveName = peerMeta[data.id]?.name || "Участник";
+    showToast(`${leaveName} покинул конференцию`, "info", 4000);
+    removeVideoBox(data.id);
+});
 
 socket.on("screen-share-state", data => {
     const box = document.getElementById("box-" + data.from);
@@ -938,6 +954,8 @@ socket.on("screen-share-state", data => {
     if (vid) vid.classList.toggle("screen-video", data.sharing);
 
     if (data.sharing) {
+        const sharerName = peerMeta[data.from]?.name || "Участник";
+        showToast(`🖥 ${sharerName} начал демонстрацию экрана`, "info", 4000);
         /* Показываем слайдер громкости звука экрана для зрителей.
            Аудио доставляется через тот же аудио-сендер (replaceTrack/WebAudio-микс),
            поэтому управляем громкостью через volume на video / audio элементе. */
@@ -1102,6 +1120,7 @@ screenBtn.onclick = async () => {
         setScreenIcon();
         socket.emit("screen-share-state", { sharing: false });
         hideScreenAudioPanel();
+        showToast("Демонстрация экрана остановлена.", "info", 3000);
 
         /* Убираем WebAudio-микс: возвращаем исходный мик-трек */
         if (screenAudioMix) {
@@ -1139,6 +1158,7 @@ screenBtn.onclick = async () => {
         screenEnabled = true;
         setScreenIcon();
         socket.emit("screen-share-state", { sharing: true });
+        showToast("Демонстрация экрана началась — участники видят ваш экран.", "success", 4000);
 
         const screenTrack       = screenStream.getVideoTracks()[0];
         const screenAudioTracks = screenStream.getAudioTracks();
@@ -1204,7 +1224,11 @@ screenBtn.onclick = async () => {
         showVideoInBox("local", screenStream, true, true);
         screenTrack.onended = () => { if (screenEnabled) screenBtn.click(); };
     } catch (e) {
-        if (e.name !== "NotAllowedError") showToast("Не удалось начать демонстрацию: " + e.message, "error");
+        if (e.name === "NotAllowedError") {
+            showToast("Демонстрация экрана отменена.", "info", 3000);
+        } else {
+            showToast("Не удалось начать демонстрацию экрана. Попробуйте ещё раз или перезагрузите страницу.", "error");
+        }
     }
 };
 
@@ -1212,7 +1236,7 @@ screenBtn.onclick = async () => {
    ВЫХОД — с подтверждением
 ════════════════════════════════════════════ */
 leaveBtn.onclick = () => {
-    if (!confirm("Покинуть звонок?")) return;
+    if (!confirm("Вы уверены, что хотите покинуть конференцию?\n\nВы выйдете из звонка и вернётесь на главную страницу.")) return;
     /* Останавливаем все speaking-мониторы */
     Object.keys(speakingCancels).forEach(id => { speakingCancels[id]?.(); });
     /* Чистим speakTimers */
