@@ -87,7 +87,7 @@ io.on("connection", socket => {
         const room   = sanitizeRoom(data.room);
         /* #68b — Фильтруем управляющие символы из имени и аватара */
         const name   = String(data.name   || "Участник").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 64) || "Участник";
-        const avatar = String(data.avatar || "cap").replace(/[^\w]/g, "").slice(0, 16) || "cap";
+        const avatar = "default"; /* единый силуэт, выбор аватара отключён */
 
         if (!room) { socket.emit("room-error", "Неверный код комнаты"); return; }
 
@@ -136,7 +136,7 @@ io.on("connection", socket => {
             offer:  data.offer,
             from:   socket.id,
             name:   socket.data.name   || "Участник",
-            avatar: socket.data.avatar || "cap"
+            avatar: "default"
         });
     });
 

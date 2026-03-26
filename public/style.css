@@ -1186,7 +1186,7 @@ input:focus-visible {
 }
 
 /* #71 — touch-action: manipulation убирает задержку 300ms перед tap на мобильных браузерах */
-button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn, .dice-btn {
+button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn {
     touch-action: manipulation;
 }
 
@@ -1200,82 +1200,10 @@ button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn, .dice-btn {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
-    .avatar-rolling { animation: none !important; }
     .flip-digit.flipping { animation: none !important; }
     .vc-toast { transition: none !important; }
 }
 
-/* ═══════════════════════════════════════
-   РАНДОМНЫЙ АВАТАР + КУБИК
-═══════════════════════════════════════ */
-.avatar-random-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    margin: 10px 0 4px;
-}
-
-.avatar-random-display {
-    width: 76px;
-    height: 76px;
-    border-radius: 50%;
-    overflow: hidden;
-    background: rgba(255,255,255,0.06);
-    border: 2px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.avatar-random-display svg {
-    width: 76px;
-    height: 76px;
-    display: block;
-}
-
-.avatar-random-label {
-    font-size: 12px;
-    color: var(--text3);
-    min-height: 16px;
-    text-align: center;
-}
-
-.dice-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 16px;
-    border-radius: 20px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border);
-    color: var(--text2);
-    cursor: pointer;
-    font-size: 13px;
-    transition: background 0.15s, transform 0.1s, border-color 0.15s;
-    user-select: none;
-}
-.dice-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
-.dice-btn:hover {
-    background: rgba(99,102,241,0.15);
-    border-color: rgba(99,102,241,0.5);
-    transform: scale(1.04);
-}
-.dice-btn:active { transform: scale(0.96); }
-.dice-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none !important;
-}
-
-/* Анимация смены аватара (каждый кадр прокрутки) */
-@keyframes avatar-flip {
-    0%   { transform: scale(1)    rotate(0deg);  opacity: 1; }
-    35%  { transform: scale(0.55) rotate(12deg); opacity: 0.6; }
-    65%  { transform: scale(0.55) rotate(-8deg); opacity: 0.6; }
-    100% { transform: scale(1)    rotate(0deg);  opacity: 1; }
-}
-.avatar-rolling { animation: avatar-flip 0.13s ease; }
 
 /* ── SVG в видео-боксах (когда камера выкл.) ── */
 .avatar {

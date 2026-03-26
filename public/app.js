@@ -1,7 +1,7 @@
 const params   = new URLSearchParams(window.location.search);
 const room     = params.get("room");
 const name     = params.get("name");
-const avatar   = params.get("avatar") || "cap";
+const avatar   = "default"; /* единый силуэт для всех */
 const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
 /* #40 — NaN guard: parseInt("abc") = NaN → NaN/100 = NaN → Math.max/min пропускают NaN.
