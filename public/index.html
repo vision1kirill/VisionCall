@@ -34,12 +34,12 @@
   <div class="avatar-random-section">
     <div class="avatar-random-display" id="avatarDisplayHome"></div>
     <div class="avatar-random-label" id="avatarLabelHome"></div>
-    <button type="button" class="dice-btn" id="diceBtnHome" title="Выбрать другого Мстителя">
+    <button type="button" class="dice-btn" id="diceBtnHome" title="Другой персонаж">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/></svg>
-      Другой Мститель
+      Другой персонаж
     </button>
   </div>
-  <input type="hidden" id="avatar" value="ironman">
+  <input type="hidden" id="avatar" value="cap">
 
   <div class="home-actions">
     <div class="action-section">
@@ -70,12 +70,12 @@
   <div class="avatar-random-section">
     <div class="avatar-random-display" id="avatarDisplayLink"></div>
     <div class="avatar-random-label" id="avatarLabelLink"></div>
-    <button type="button" class="dice-btn" id="diceBtnLink" title="Выбрать другого Мстителя">
+    <button type="button" class="dice-btn" id="diceBtnLink" title="Другой персонаж">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"/></svg>
-      Другой Мститель
+      Другой персонаж
     </button>
   </div>
-  <input type="hidden" id="avatarLink" value="ironman">
+  <input type="hidden" id="avatarLink" value="cap">
 
   <button class="join-btn" onclick="joinViaLink()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -93,7 +93,7 @@ const AVATAR_SAVED_KEY = "vc_avatar";
 
 function getRandomAvatarKey(exclude) {
     const keys = Object.keys(window.AVATARS || {});
-    if (!keys.length) return "ironman";
+    if (!keys.length) return "cap";
     const pool = keys.length > 1 ? keys.filter(k => k !== exclude) : keys;
     return pool[Math.floor(Math.random() * pool.length)];
 }

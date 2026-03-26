@@ -1,7 +1,7 @@
 const params   = new URLSearchParams(window.location.search);
 const room     = params.get("room");
 const name     = params.get("name");
-const avatar   = params.get("avatar") || "ironman";
+const avatar   = params.get("avatar") || "cap";
 const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
 /* #40 — NaN guard: parseInt("abc") = NaN → NaN/100 = NaN → Math.max/min пропускают NaN.
@@ -687,7 +687,7 @@ function createPeer(id) {
     };
 
     pc.ontrack = e => {
-        const meta = peerMeta[id] || { name: "Участник", avatar: "ironman" };
+        const meta = peerMeta[id] || { name: "Участник", avatar: "cap" };
         if (!document.getElementById("box-" + id)) {
             createVideoBox(id, meta.name, meta.avatar);
             addParticipant(id, meta.name, meta.avatar, id === roomCreatorId);
@@ -901,9 +901,9 @@ socket.on("user-connected", async data => {
     /* #59 — Null check: data.id обязателен для создания peer connection */
     if (!data.id) return;
     showToast(`👋 ${data.name || "Участник"} присоединился к конференции`, "info", 4000);
-    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "ironman" };
-    addParticipant(data.id, data.name, data.avatar || "ironman", data.id === roomCreatorId);
-    createVideoBox(data.id, data.name, data.avatar || "ironman");
+    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "cap" };
+    addParticipant(data.id, data.name, data.avatar || "cap", data.id === roomCreatorId);
+    createVideoBox(data.id, data.name, data.avatar || "cap");
 
     const pc = createPeer(data.id);
 
@@ -958,10 +958,10 @@ socket.on("offer", async data => {
     /* #60 — Null check: data.offer обязателен для setRemoteDescription */
     if (!data.from || !data.offer) return;
     if (data.name) {
-        peerMeta[data.from] = { name: data.name, avatar: data.avatar || "ironman" };
+        peerMeta[data.from] = { name: data.name, avatar: data.avatar || "cap" };
         if (!document.getElementById("box-" + data.from)) {
-            createVideoBox(data.from, data.name, data.avatar || "ironman");
-            addParticipant(data.from, data.name, data.avatar || "ironman", data.from === roomCreatorId);
+            createVideoBox(data.from, data.name, data.avatar || "cap");
+            addParticipant(data.from, data.name, data.avatar || "cap", data.from === roomCreatorId);
         } else {
             const label = document.getElementById("label-" + data.from);
             if (label) label.innerHTML = makeLabelHTML(data.name, false, false);
