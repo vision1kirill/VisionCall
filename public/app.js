@@ -173,6 +173,37 @@ function getBlackVideoTrack() {
     return _blackTrack;
 }
 
+/* ── Тихий аудиотрек (заглушка для аудио-сендера при выключенном микрофоне).
+   КРИТИЧЕСКИ ВАЖНО: гарантирует аудио m-line в SDP с самого начала соединения.
+   Без этого, когда оба пользователя входят с выключенным микрофоном, первичный
+   offer/answer не содержит аудио m-line. Последующее добавление аудио через
+   addTrack требует renegotiation, которая в ряде браузеров/сетей теряется.
+   Решение: всегда добавлять аудио-сендер (тихий трек), при включении микрофона
+   использовать replaceTrack — renegotiation не требуется. ── */
+let _silentCtx   = null;
+let _silentTrack = null;
+function getSilentAudioTrack() {
+    if (_silentTrack && _silentTrack.readyState === "live") return _silentTrack;
+    try {
+        if (!_silentCtx || _silentCtx.state === "closed") {
+            _silentCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+        }
+        const dest = _silentCtx.createMediaStreamDestination();
+        /* Oscillator → Gain(0) → dest: трек "живой" (readyState=live), но полностью тихий */
+        const osc  = _silentCtx.createOscillator();
+        const gain = _silentCtx.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start();
+        _silentTrack = dest.stream.getAudioTracks()[0];
+        return _silentTrack;
+    } catch (e) {
+        console.warn("[audio] getSilentAudioTrack failed:", e);
+        return null;
+    }
+}
+
 /* ── AudioContext ── */
 let audioCtx    = null;
 let micGainNode = null;
@@ -1067,6 +1098,25 @@ function createPeer(id) {
         /* Проверяем что этот PC всё ещё «текущий» для данного peer-а,
            чтобы stale-ивент закрытого старого соединения не убрал новый бокс. */
         if (state === "closed" && peerConnections[id] === pc) removeVideoBox(id);
+
+        /* Показываем состояние ICE в UI: при failed/disconnected предупреждаем
+           пользователя о проблеме с сетевым соединением. */
+        const box = document.getElementById("box-" + id);
+        if (box) {
+            let badge = box.querySelector(".vc-conn-badge");
+            if (state === "failed") {
+                if (!badge) {
+                    badge = document.createElement("div");
+                    badge.className = "vc-conn-badge";
+                    box.appendChild(badge);
+                }
+                badge.textContent = "⚠️ Нет связи";
+                badge.title = "Соединение не установлено. Возможно, требуется TURN-сервер для данной сети.";
+                badge.style.cssText = "position:absolute;top:8px;right:8px;background:rgba(239,68,68,0.9);color:#fff;font-size:11px;padding:3px 7px;border-radius:12px;z-index:5;pointer-events:none;";
+            } else if (state === "connected" || state === "completed") {
+                badge?.remove();
+            }
+        }
     };
 
     peerConnections[id] = pc;
@@ -1263,6 +1313,13 @@ socket.on("user-connected", async data => {
     if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
         pc.addTrack(getBlackVideoTrack(), localStream || new MediaStream());
     }
+    /* Гарантируем аудио-сендер с самого начала: если нет — добавляем тихий трек-заглушку.
+       Это обеспечивает аудио m-line в SDP при первом offer/answer даже когда микрофон выключен.
+       При включении микрофона достаточно replaceTrack — renegotiation не нужна. */
+    if (!pc.getSenders().some(s => s.track?.kind === "audio")) {
+        const silentTrack = getSilentAudioTrack();
+        if (silentTrack) pc.addTrack(silentTrack, localStream || new MediaStream());
+    }
     if (screenEnabled && screenStream) {
         /* Видео экрана: заменяем видео-сендер (replaceTrack, без renegotiation) */
         const screenTrack = screenStream.getVideoTracks()[0];
@@ -1331,6 +1388,11 @@ socket.on("offer", async data => {
     /* Если камера выключена, добавляем чёрный трек чтобы видео-сендер существовал */
     if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
         pc.addTrack(getBlackVideoTrack(), localStream || new MediaStream());
+    }
+    /* Гарантируем аудио-сендер (тихий трек) если ещё нет — см. комментарий в user-connected */
+    if (!pc.getSenders().some(s => s.track?.kind === "audio")) {
+        const silentTrack = getSilentAudioTrack();
+        if (silentTrack) pc.addTrack(silentTrack, localStream || new MediaStream());
     }
 
     try {
@@ -1534,17 +1596,30 @@ if (micBtn) micBtn.onclick = async () => {   /* #56 — null guard */
     /* Возобновляем AudioContext при первом пользовательском жесте.
        На iOS/Safari AudioContext требует явного gesture для resume после создания. */
     ensureAudioCtxRunning();
-    /* audioOnly=true: запрашиваем только микрофон, не спрашиваем разрешение на камеру.
-       Это исправляет баг на мобильных: при нажатии кнопки «Микрофон» браузер не
-       должен спрашивать разрешение на камеру — только на микрофон. */
+    /* audioOnly=true: запрашиваем только микрофон, не спрашиваем разрешение на камеру. */
     if (!localStream) { await startCamera(undefined, /*audioOnly=*/true); if (!localStream) return; }
     micEnabled = !micEnabled;
-    localStream.getAudioTracks().forEach(t => {
-        t.enabled = micEnabled;
-        /* Не заменяем аудио-сендер если активен WebAudio-микс screen share:
-           WebAudio-граф читает из того же трека и сам передаёт тишину/звук. */
-        if (!screenAudioMix) addTrackToPeers(t, localStream);
-    });
+    const micAudioTrack = localStream.getAudioTracks()[0];
+    if (micAudioTrack) {
+        micAudioTrack.enabled = micEnabled;
+        if (!screenAudioMix) {
+            /* Используем replaceTrack вместо addTrack: аудио m-line уже есть в SDP
+               (добавлена тихим треком при инициализации), renegotiation не нужна.
+               При включении заменяем тихий трек на реальный микрофон.
+               При выключении заменяем обратно на тихий трек. */
+            for (const [, pc] of Object.entries(peerConnections)) {
+                const sender = pc.getSenders().find(s => s.track?.kind === "audio");
+                if (sender) {
+                    const newTrack = micEnabled ? micAudioTrack : getSilentAudioTrack();
+                    if (newTrack) sender.replaceTrack(newTrack).catch(e => console.warn("[mic] replaceTrack:", e));
+                } else {
+                    /* Запасной путь: аудио-сендер не создан (не должно случиться
+                       с новой логикой, но защищаемся) — добавляем трек (с renegotiation) */
+                    pc.addTrack(micAudioTrack, localStream);
+                }
+            }
+        }
+    }
     setMicIcon();
     updateLabelIcons("local", micEnabled, camEnabled);
     emitMediaState();
@@ -1686,13 +1761,15 @@ if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
             try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
             try { screenAudioMix.screenGain?.disconnect(); } catch (e) {}
             screenAudioMix = null;
-            /* replaceTrack обратно на исходный микрофон — без рenegotiации.
-               Если мик-трека нет (пользователь никогда не включал микрофон),
-               заменяем на null чтобы освободить WebAudio-ресурсы у отправителя. */
+            /* replaceTrack обратно на исходный микрофон — без renegotiation.
+               Если мик-трека нет (пользователь ещё не включал микрофон),
+               ставим тихий трек-заглушку (не null!) чтобы аудио-сендер
+               оставался живым и аудио m-line сохранялась в SDP. */
             const micTrack = localStream?.getAudioTracks()[0] ?? null;
+            const restoreTrack = (micEnabled && micTrack) ? micTrack : getSilentAudioTrack();
             for (const [, pc] of Object.entries(peerConnections)) {
                 const s = pc.getSenders().find(s => s.track?.kind === "audio");
-                if (s) s.replaceTrack(micTrack).catch(() => {});
+                if (s && restoreTrack) s.replaceTrack(restoreTrack).catch(() => {});
             }
         }
 
