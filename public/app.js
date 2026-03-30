@@ -89,6 +89,12 @@ const peerConnections = {};
 const peerMeta        = {};
 const makingOffer     = {};
 
+/* ── Входящие видео-потоки по ID собеседника ──────────────────────
+   Хранит e.streams[0] из ontrack для видео-трека.
+   Нужно чтобы показать видео ПОСЛЕ получения media-state(cam:true),
+   если ontrack пришёл раньше (что типично). ──────────────────────*/
+const peerVideoStreams = {};
+
 /* ID создателя комнаты (первый вошедший) — для значка короны */
 let roomCreatorId = null;
 
@@ -432,6 +438,7 @@ function removeVideoBox(id) {
     delete makingOffer[id];
     delete peerMeta[id];
     delete pendingCandidates[id];
+    delete peerVideoStreams[id];
     updateGridLayout();
 }
 
@@ -809,18 +816,27 @@ function createPeer(id) {
         }
 
         if (e.track.kind === "video") {
-            /* Пропускаем чёрный canvas-трек (заглушка выключенной камеры) */
-            if (e.track.label === "" || (e.streams[0] && e.streams[0].getVideoTracks().length === 0)) {
+            /* Сохраняем поток — нужен если media-state(cam:true) придёт позже */
+            peerVideoStreams[id] = e.streams[0];
+
+            /* Не доверяем e.track.label для определения «заглушки»:
+               на принимающей стороне браузер генерирует label сам,
+               и он может отличаться от пустой строки отправителя.
+               Вместо этого используем media-state: если cam:false → аватар,
+               если cam:true → видео. media-state приходит чуть позже чем
+               ontrack, поэтому изначально показываем аватар и ждём. */
+            if (peerMeta[id]?.cam) {
+                showVideoInBox(id, e.streams[0], false, false);
+                monitorSpeaking(id, e.streams[0]);
+                /* Убираем audio-only элемент: теперь аудио воспроизводит <video> */
+                if (peerAudioEls[id]) {
+                    peerAudioEls[id].srcObject = null;
+                    peerAudioEls[id].remove();
+                    delete peerAudioEls[id];
+                }
+            } else {
+                /* cam ещё не подтверждена — показываем аватар */
                 showAvatarInBox(id, meta.avatar);
-                return;
-            }
-            showVideoInBox(id, e.streams[0], false, false);
-            monitorSpeaking(id, e.streams[0]);
-            /* Убираем audio-only элемент: теперь аудио воспроизводит <video muted=false> */
-            if (peerAudioEls[id]) {
-                peerAudioEls[id].srcObject = null;
-                peerAudioEls[id].remove();
-                delete peerAudioEls[id];
             }
         } else if (e.track.kind === "audio") {
             const box           = document.getElementById("box-" + id);
@@ -965,6 +981,7 @@ socket.on("connect", () => {
         Object.keys(peerMeta).forEach(id => delete peerMeta[id]);
         Object.keys(makingOffer).forEach(id => delete makingOffer[id]);
         Object.keys(pendingCandidates).forEach(id => delete pendingCandidates[id]);
+        Object.keys(peerVideoStreams).forEach(id => delete peerVideoStreams[id]);
         screenSharingPeers.clear();
         roomCreatorId = null;
         updateGridLayout();
@@ -1256,13 +1273,31 @@ function emitMediaState() {
     socket.emit("media-state", { mic: micEnabled, cam: camEnabled });
 }
 socket.on("media-state", data => {
-    /* Сохраняем состояние в peerMeta — чтобы при пересоздании бокса
-       (переподключение) иконки сразу показывали правильное состояние */
+    const prevCam = peerMeta[data.from]?.cam;
+
+    /* Сохраняем состояние в peerMeta */
     if (peerMeta[data.from]) {
         peerMeta[data.from].mic = data.mic;
         peerMeta[data.from].cam = data.cam;
     }
     updateLabelIcons(data.from, data.mic, data.cam);
+
+    /* Переключаем аватар ↔ видео если состояние камеры изменилось */
+    if (prevCam !== data.cam) {
+        if (data.cam && peerVideoStreams[data.from]) {
+            /* Камера включилась — показываем видео */
+            showVideoInBox(data.from, peerVideoStreams[data.from], false, false);
+            monitorSpeaking(data.from, peerVideoStreams[data.from]);
+            if (peerAudioEls[data.from]) {
+                peerAudioEls[data.from].srcObject = null;
+                peerAudioEls[data.from].remove();
+                delete peerAudioEls[data.from];
+            }
+        } else if (!data.cam) {
+            /* Камера выключилась — показываем аватар */
+            showAvatarInBox(data.from, peerMeta[data.from]?.avatar || "default");
+        }
+    }
 });
 
 /* ════════════════════════════════════════════
@@ -1587,6 +1622,9 @@ updateGridLayout();
 setMicIcon();
 setCamIcon();
 setScreenIcon();
+/* Сразу обновляем иконки в лейбле — createVideoBox всегда ставит (false,false),
+   а пользователь мог включить mic/cam ещё в лобби */
+updateLabelIcons("local", micEnabled, camEnabled);
 if (copyBtn) {
     copyBtn.innerHTML = ICONS.copyLink;
     copyBtn.setAttribute("aria-label", "Поделиться ссылкой");

@@ -634,22 +634,25 @@ body.lobby-page {
     display: flex;
     align-items: flex-end;
     gap: 3px;
-    padding: 5px 7px 4px;
-    background: rgba(0,0,0,0.65);
-    border-radius: 7px;
+    padding: 5px 8px 5px;
+    /* Явная граница делает контейнер видимым даже на чёрном фоне */
+    background: rgba(10,12,22,0.82);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 8px;
     z-index: 10;
     pointer-events: none;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 .qbar {
     width: 4px;
     border-radius: 2px;
-    background: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.45);
     transition: background 0.4s;
 }
-.qbar1 { height: 5px; }
-.qbar2 { height: 10px; }
-.qbar3 { height: 15px; }
+.qbar1 { height: 6px; }
+.qbar2 { height: 11px; }
+.qbar3 { height: 16px; }
 
 /* Хорошее — все три зелёные */
 .quality-good .qbar { background: #22c55e; }
