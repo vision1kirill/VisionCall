@@ -541,6 +541,18 @@ body.lobby-page {
     letter-spacing: 1px;
     font-weight: 600;
     color: var(--text2);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: all;
+}
+.room-info #roomTitle:hover {
+    background: rgba(99,102,241,0.12);
+    color: #a5b4fc;
+    border-color: rgba(99,102,241,0.4);
+}
+.room-info #roomTitle[title]:hover::after {
+    content: " 📋";
+    font-size: 11px;
 }
 
 #copyBtn {
@@ -1119,6 +1131,31 @@ video.flip-h { transform: scaleX(-1); }
 @media (max-width: 480px) {
     .join-card { padding: 28px 20px; }
     .lobby-card { padding: 24px 18px; }
+}
+
+/* ═══════════════════════════════════════
+   iOS SAFE AREA — поддержка notch / Dynamic Island
+═══════════════════════════════════════ */
+.topbar {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+.controls {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(86px + env(safe-area-inset-bottom, 0px));
+}
+.main {
+    /* Учитываем topbar + controls с безопасными зонами */
+    padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ═══════════════════════════════════════
+   LANDSCAPE — оптимизация горизонтального режима
+═══════════════════════════════════════ */
+@media (orientation: landscape) and (max-height: 500px) {
+    .topbar { height: 44px; }
+    .controls { height: calc(64px + env(safe-area-inset-bottom, 0px)); }
+    .controls button { width: 44px; height: 44px; }
+    .main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ═══════════════════════════════════════

@@ -1,0 +1,18 @@
+{
+  "name": "VisionCall",
+  "short_name": "VisionCall",
+  "description": "Бесплатные защищённые видеоконференции прямо в браузере",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08091a",
+  "theme_color": "#0f1117",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

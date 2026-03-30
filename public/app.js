@@ -68,9 +68,28 @@ if (!vcSessionId) {
 
 const socket = io();
 
-/* #73 — null guard: roomTitle может отсутствовать в кастомных сборках */
+/* Задаём код комнаты в топбаре */
 const roomTitleEl = document.getElementById("roomTitle");
-if (roomTitleEl) roomTitleEl.textContent = room;
+if (roomTitleEl) {
+    roomTitleEl.textContent = room;
+    roomTitleEl.title = "Нажмите, чтобы скопировать ссылку приглашения";
+    /* Клик на код комнаты = копирование ссылки */
+    roomTitleEl.onclick = () => {
+        const url = `${location.origin}/?room=${encodeURIComponent(room)}`;
+        navigator.clipboard?.writeText(url)
+            .then(() => showToast("Ссылка скопирована!", "success", 2500))
+            .catch(() => {
+                try {
+                    const inp = document.createElement("input");
+                    inp.value = url; document.body.appendChild(inp); inp.select();
+                    document.execCommand("copy"); inp.remove();
+                    showToast("Ссылка скопирована!", "success", 2500);
+                } catch (_) {}
+            });
+    };
+}
+/* Обновляем <title> страницы: "Комната ABC123 — VisionCall" */
+document.title = `Комната ${room} — VisionCall`;
 
 const videoGrid       = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
@@ -442,10 +461,73 @@ function removeVideoBox(id) {
     updateGridLayout();
 }
 
+/* ── Баннер «Ждём участников» — показывается пока вы один в комнате ── */
+function updateWaitingBanner() {
+    if (!videoGrid) return;
+    const count = videoGrid.querySelectorAll(".video-box").length;
+    let banner = document.getElementById("vc-waiting-banner");
+    if (count <= 1) {
+        if (!banner) {
+            banner = document.createElement("div");
+            banner.id = "vc-waiting-banner";
+            banner.innerHTML = `
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;opacity:0.6">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <div>
+                    <div style="font-weight:600;margin-bottom:4px">Вы пока одни</div>
+                    <div style="opacity:0.7;font-size:13px">Поделитесь ссылкой, чтобы пригласить участников</div>
+                </div>
+                <button id="vc-waiting-copy" title="Скопировать ссылку" style="
+                    margin-left:auto;padding:8px 16px;background:rgba(99,102,241,0.2);
+                    border:1px solid rgba(99,102,241,0.5);border-radius:8px;cursor:pointer;
+                    color:#a5b4fc;font-size:13px;white-space:nowrap;flex-shrink:0;
+                    transition:background 0.15s;
+                ">Скопировать ссылку</button>
+            `;
+            banner.style.cssText = `
+                position:absolute;bottom:0;left:0;right:0;
+                display:flex;align-items:center;gap:14px;
+                padding:14px 20px;
+                background:rgba(10,12,22,0.85);
+                border-top:1px solid rgba(255,255,255,0.07);
+                backdrop-filter:blur(8px);
+                color:var(--text2,#94a3b8);
+                font-size:14px;z-index:10;
+                animation:fadeInUp 0.3s ease;
+            `;
+            /* Добавляем анимацию fadeInUp если нет */
+            if (!document.getElementById("vc-waiting-anim")) {
+                const s = document.createElement("style");
+                s.id = "vc-waiting-anim";
+                s.textContent = "@keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}";
+                document.head.appendChild(s);
+            }
+            videoGrid.style.position = "relative";
+            videoGrid.appendChild(banner);
+            const copyWaiting = document.getElementById("vc-waiting-copy");
+            if (copyWaiting) {
+                copyWaiting.onmouseenter = () => copyWaiting.style.background = "rgba(99,102,241,0.35)";
+                copyWaiting.onmouseleave = () => copyWaiting.style.background = "rgba(99,102,241,0.2)";
+                copyWaiting.onclick = () => {
+                    const link = `${location.origin}/?room=${encodeURIComponent(room)}`;
+                    navigator.clipboard?.writeText(link)
+                        .then(() => showToast("Ссылка скопирована!", "success", 2500))
+                        .catch(() => showToast("Не удалось скопировать", "error", 3000));
+                };
+            }
+        }
+    } else if (banner) {
+        banner.remove();
+    }
+}
+
 /* ── Динамическая сетка ── */
 function updateGridLayout() {
     if (!videoGrid) return;   /* #77 — null guard */
     const count = videoGrid.querySelectorAll(".video-box").length;
+    updateWaitingBanner();
     if (count <= 1) {
         videoGrid.style.gridTemplateColumns = "1fr";
         videoGrid.style.gridAutoRows = "minmax(200px, 1fr)";
@@ -1198,16 +1280,19 @@ socket.on("ice-candidate", async data => {
         try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn("addIceCandidate:", e); }
     } else {
         if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
-        pendingCandidates[data.from].push(data.candidate);
-        /* #48 — Защита от утечки памяти: чистим очередь если remoteDescription
-           так и не установился в течение 30 сек (например, peer отключился). */
+        /* Cap: не храним больше 50 кандидатов (защита от флуда) */
+        if (pendingCandidates[data.from].length < 50) {
+            pendingCandidates[data.from].push(data.candidate);
+        }
+        /* Защита от утечки памяти: чистим очередь если remoteDescription
+           так и не установился в течение 10 сек (например, peer отключился). */
         if (pendingCandidates[data.from].length === 1) {
             setTimeout(() => {
                 if (pendingCandidates[data.from]) {
                     console.warn("pendingCandidates cleanup for", data.from);
                     delete pendingCandidates[data.from];
                 }
-            }, 30_000);
+            }, 10_000);
         }
     }
 });
@@ -1533,14 +1618,24 @@ if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
     }
 
     try {
-        screenStream  = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        /* Ограничиваем fps демонстрации экрана — 15 fps вместо 30.
+           Слайды и документы выглядят одинаково хорошо при 15 fps,
+           а трафик и нагрузка на CPU снижаются примерно вдвое. */
+        screenStream  = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 15, max: 15 } },
+            audio: true
+        });
         screenEnabled = true;
         setScreenIcon();
         socket.emit("screen-share-state", { sharing: true });
-        showToast("Демонстрация экрана началась — участники видят ваш экран.", "success", 4000);
-
-        const screenTrack       = screenStream.getVideoTracks()[0];
         const screenAudioTracks = screenStream.getAudioTracks();
+        const audioMsg = screenAudioTracks.length > 0
+            ? " Аудио системы тоже передаётся."
+            : "";
+        showToast(`Демонстрация экрана началась — участники видят ваш экран.${audioMsg}`, "success", 5000);
+
+        const screenTrack = screenStream.getVideoTracks()[0];
+        /* screenAudioTracks уже объявлен выше для сообщения тоста */
 
         /* ── Видео: replaceTrack не вызывает renegotiation ── */
         for (const [, pc] of Object.entries(peerConnections)) {
@@ -1656,6 +1751,16 @@ function emitLeave() {
 }
 window.addEventListener("beforeunload", emitLeave);
 window.addEventListener("pagehide",     emitLeave);
+
+/* ── Android: кнопка "Назад" — предотвращаем случайный выход из звонка ── */
+history.pushState(null, "", location.href);
+window.addEventListener("popstate", () => {
+    history.pushState(null, "", location.href);
+    if (confirm("Покинуть конференцию?")) {
+        emitLeave();
+        window.location.replace("/");
+    }
+});
 
 /* ════════════════════════════════════════════
    ИНИЦИАЛИЗАЦИЯ

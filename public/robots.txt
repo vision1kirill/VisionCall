@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /lobby.html
+Disallow: /room.html
+Disallow: /api/
+
+Sitemap: https://visioncall.ru/sitemap.xml

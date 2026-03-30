@@ -18,6 +18,28 @@ const io = new Server(server, {
 });
 
 app.use(express.urlencoded({ extended: false })); /* для sendBeacon POST-тела */
+
+/* ════════════════════════════════════════════
+   SECURITY HEADERS — базовая защита от XSS, clickjacking, MIME-sniffing
+════════════════════════════════════════════ */
+app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    /* CSP: разрешаем только свои ресурсы + socket.io inline-скрипты */
+    res.setHeader("Content-Security-Policy",
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; " +
+        "connect-src 'self' wss: ws:; " +
+        "media-src 'self' blob: mediastream:; " +
+        "frame-ancestors 'none';"
+    );
+    next();
+});
+
 app.use(express.static("public", {
     maxAge: "1h",
     setHeaders(res, path) {
@@ -186,7 +208,8 @@ function rateLimit(socketId, event, max, windowMs) {
 /* ── Валидация кода комнаты ── */
 function sanitizeRoom(raw) {
     /* Разрешаем только буквы, цифры, дефис, подчёркивание, длина 1–32 */
-    return String(raw || "").replace(/[^\w-]/g, "").slice(0, 32);
+    const room = String(raw || "").replace(/[^\w-]/g, "").slice(0, 32);
+    return room.length > 0 ? room : null;
 }
 
 /* ── Проверка, что два сокета в одной комнате ── */
@@ -277,6 +300,8 @@ io.on("connection", socket => {
     /* ── Signaling — все три события проверяют членство в одной комнате ── */
     socket.on("offer", data => {
         if (!data.to || !sameRoom(socket, data.to)) return;
+        /* Rate-limit: до 30 offer за 10 сек — защита от флуда сигнализацией */
+        if (!rateLimit(socket.id, "offer", 30, 10_000)) return;
         /* #66 — Проверяем что offer является объектом с типом SDP */
         if (!data.offer || typeof data.offer !== "object" || data.offer.type !== "offer") return;
         io.to(data.to).emit("offer", {
@@ -289,6 +314,8 @@ io.on("connection", socket => {
 
     socket.on("answer", data => {
         if (!data.to || !sameRoom(socket, data.to)) return;
+        /* Rate-limit: до 30 answer за 10 сек */
+        if (!rateLimit(socket.id, "answer", 30, 10_000)) return;
         /* #67 — Проверяем что answer является объектом с типом SDP */
         if (!data.answer || typeof data.answer !== "object" || data.answer.type !== "answer") return;
         io.to(data.to).emit("answer", { answer: data.answer, from: socket.id });

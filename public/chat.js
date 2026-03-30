@@ -49,6 +49,8 @@ socket.on("chat-message", data => {
     }
 });
 
+const MAX_CHAT_MESSAGES = 200; /* Ограничиваем DOM: предотвращаем утечку памяти */
+
 function addMessage(author, text, isSelf) {
     if (!messages) return;   /* #33 — null guard: messages может отсутствовать */
     const div = document.createElement("div");
@@ -65,6 +67,11 @@ function addMessage(author, text, isSelf) {
     div.appendChild(authorEl);
     div.appendChild(textEl);
     messages.appendChild(div);
+
+    /* Удаляем самые старые сообщения если превышен лимит */
+    while (messages.childElementCount > MAX_CHAT_MESSAGES) {
+        messages.firstElementChild?.remove();
+    }
 
     /* Скроллим вниз только если пользователь и так внизу */
     const threshold = 60;

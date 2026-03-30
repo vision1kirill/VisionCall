@@ -2,11 +2,13 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- #84 — theme-color: цвет заголовка браузера на мобильных устройствах -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0f1117">
-<title>VisionCall — Предпросмотр</title>
+<title>VisionCall — Настройка перед входом</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="lobby-page">
@@ -33,11 +35,11 @@
   <!-- Кнопки микрофона и камеры -->
   <div class="lobby-controls">
 
-    <button class="lobby-ctrl-btn" id="lobbyMicBtn" title="Включить микрофон">
+    <button class="lobby-ctrl-btn" id="lobbyMicBtn" title="Включить микрофон" aria-label="Включить микрофон" aria-pressed="false">
       <!-- иконка задаётся через JS -->
     </button>
 
-    <button class="lobby-ctrl-btn" id="lobbyCamBtn" title="Включить камеру">
+    <button class="lobby-ctrl-btn" id="lobbyCamBtn" title="Включить камеру" aria-label="Включить камеру" aria-pressed="false">
       <!-- иконка задаётся через JS -->
     </button>
 
