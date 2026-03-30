@@ -1496,6 +1496,18 @@ if (leaveBtn) leaveBtn.onclick = () => {  /* #53 — null guard */
 };
 
 /* ════════════════════════════════════════════
+   ЯВНЫЙ ВЫХОД ПРИ ОБНОВЛЕНИИ / ЗАКРЫТИИ
+   Отправляем leave-room ДО того как браузер
+   закроет WebSocket — сервер мгновенно убирает
+   нас из комнаты без ожидания ping timeout.
+════════════════════════════════════════════ */
+function emitLeave() {
+    if (socket.connected) socket.emit("leave-room");
+}
+window.addEventListener("beforeunload", emitLeave);
+window.addEventListener("pagehide",     emitLeave);
+
+/* ════════════════════════════════════════════
    ИНИЦИАЛИЗАЦИЯ
 ════════════════════════════════════════════ */
 createVideoBox("local", name, avatar);

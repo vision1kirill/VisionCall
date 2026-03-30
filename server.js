@@ -10,7 +10,11 @@ const io = new Server(server, {
     cors: {
         origin: process.env.ALLOWED_ORIGIN || "*",
         methods: ["GET", "POST"]
-    }
+    },
+    /* Сокращаем таймауты: мёртвые сокеты обнаруживаются за ~10 сек
+       вместо дефолтных ~25 сек. Уменьшает время жизни "призраков". */
+    pingInterval: 8000,
+    pingTimeout:  4000
 });
 
 app.use(express.static("public", {
@@ -297,6 +301,35 @@ io.on("connection", socket => {
             from:    socket.id,
             sharing: !!data.sharing
         });
+    });
+
+    /* ── Явный выход (beforeunload на клиенте) ──
+       Срабатывает ДО того как браузер закроет WebSocket.
+       Позволяет мгновенно убрать призрака без ожидания ping timeout. */
+    socket.on("leave-room", () => {
+        const room = socket.data.room;
+        if (!room) return;
+        socket.to(room).emit("user-disconnected", { id: socket.id });
+        const members = rooms.get(room);
+        if (members) {
+            members.delete(socket.id);
+            if (members.size === 0) {
+                rooms.delete(room);
+                roomSessions.delete(room);
+            } else if (members._creator === socket.id) {
+                const newCreatorId = members.keys().next().value;
+                members._creator = newCreatorId;
+                socket.to(room).emit("new-creator", { id: newCreatorId });
+            }
+        }
+        const sid = socket.data.sessionId;
+        if (sid) {
+            const sessions = roomSessions.get(room);
+            if (sessions && sessions.get(sid) === socket.id) sessions.delete(sid);
+        }
+        socket.data.room = null;
+        socket.leave(room);
+        console.log(`[leave-room] ${socket.data.name || socket.id} explicit leave from room=${room}`);
     });
 
     /* ── Отключение ── */
