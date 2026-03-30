@@ -56,6 +56,16 @@ const ICONS = {
     labelCamOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>`,
 };
 
+/* Постоянный ID сессии — позволяет серверу выгнать старый "призрак"
+   при обновлении страницы или переподключении того же пользователя */
+const VC_SESSION_KEY = "vc_session_id";
+let vcSessionId;
+try { vcSessionId = localStorage.getItem(VC_SESSION_KEY); } catch (_) {}
+if (!vcSessionId) {
+    vcSessionId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { localStorage.setItem(VC_SESSION_KEY, vcSessionId); } catch (_) {}
+}
+
 const socket = io();
 
 /* #73 — null guard: roomTitle может отсутствовать в кастомных сборках */
@@ -922,7 +932,7 @@ socket.on("connect", () => {
     }
 
     _joined = true;
-    socket.emit("join-room", { room, name, avatar });
+    socket.emit("join-room", { room, name, avatar, sessionId: vcSessionId });
 });
 
 /* Уведомляем пользователя о потере соединения */

@@ -644,8 +644,8 @@ body.lobby-page {
 .qbar {
     width: 3px;
     border-radius: 2px;
-    background: rgba(255,255,255,0.18);
-    transition: background 0.4s, opacity 0.4s;
+    background: rgba(255,255,255,0.35);
+    transition: background 0.4s;
 }
 .qbar1 { height: 4px; }
 .qbar2 { height: 8px; }
@@ -657,12 +657,12 @@ body.lobby-page {
 /* Среднее — две жёлтые, третья серая */
 .quality-fair .qbar1,
 .quality-fair .qbar2 { background: #f59e0b; }
-.quality-fair .qbar3 { background: rgba(255,255,255,0.18); }
+.quality-fair .qbar3 { background: rgba(255,255,255,0.35); }
 
 /* Плохое — одна красная, остальные серые */
 .quality-poor .qbar1 { background: #ef4444; }
 .quality-poor .qbar2,
-.quality-poor .qbar3 { background: rgba(255,255,255,0.18); }
+.quality-poor .qbar3 { background: rgba(255,255,255,0.35); }
 
 /* Speaking indicator ── */
 .video-box.speaking {

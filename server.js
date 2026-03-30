@@ -120,6 +120,11 @@ const MAX_ROOM_SIZE = 8; /* максимум участников в одной 
  */
 const rooms = new Map();
 
+/* sessionId → socketId для каждой комнаты.
+   Позволяет выгнать старый "призрак" когда тот же пользователь
+   переподключается (обновил страницу, потерял связь и вернулся). */
+const roomSessions = new Map(); /* room → Map<sessionId, socketId> */
+
 /* ── Rate-limit helper ── */
 const rateLimits = new Map(); /* socketId → Map<event, { count, resetAt }> */
 
@@ -160,12 +165,35 @@ io.on("connection", socket => {
     socket.on("join-room", data => {
         /* #68 — Защита от prototype pollution: data должен быть объектом */
         if (!data || typeof data !== "object") return;
-        const room   = sanitizeRoom(data.room);
+        const room      = sanitizeRoom(data.room);
         /* #68b — Фильтруем управляющие символы из имени и аватара */
-        const name   = String(data.name   || "Участник").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 64) || "Участник";
-        const avatar = "default"; /* единый силуэт, выбор аватара отключён */
+        const name      = String(data.name || "Участник").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 64) || "Участник";
+        const avatar    = "default"; /* единый силуэт, выбор аватара отключён */
+        const sessionId = String(data.sessionId || "").replace(/[^\w]/g, "").slice(0, 64);
 
         if (!room) { socket.emit("room-error", "Неверный код комнаты"); return; }
+
+        /* ── Выгоняем старый "призрак" того же пользователя ──
+           Если sessionId уже есть в комнате (другой socketId) — это
+           обновление страницы или повторное подключение. Удаляем старый
+           сокет чтобы не плодить дубли. */
+        if (sessionId) {
+            if (!roomSessions.has(room)) roomSessions.set(room, new Map());
+            const sessions = roomSessions.get(room);
+            const oldSocketId = sessions.get(sessionId);
+            if (oldSocketId && oldSocketId !== socket.id) {
+                const oldSocket = io.sockets.sockets.get(oldSocketId);
+                const members   = rooms.get(room);
+                if (members && members.has(oldSocketId)) {
+                    members.delete(oldSocketId);
+                    socket.to(room).emit("user-disconnected", { id: oldSocketId });
+                    console.log(`[ghost] evicted old socket ${oldSocketId} for session ${sessionId}`);
+                }
+                if (oldSocket) { oldSocket.data.room = null; oldSocket.leave(room); }
+            }
+            sessions.set(sessionId, socket.id);
+        }
+        socket.data.sessionId = sessionId;
 
         /* Ограничение числа участников */
         const roomMap = rooms.get(room);
@@ -280,8 +308,15 @@ io.on("connection", socket => {
             const members = rooms.get(room);
             if (members) {
                 members.delete(socket.id);
+                /* Чистим sessionId только если этот сокет всё ещё актуальный */
+                const sid = socket.data.sessionId;
+                if (sid) {
+                    const sessions = roomSessions.get(room);
+                    if (sessions && sessions.get(sid) === socket.id) sessions.delete(sid);
+                }
                 if (members.size === 0) {
                     rooms.delete(room);
+                    roomSessions.delete(room);
                 } else if (members._creator === socket.id) {
                     /* #64 — Продвижение создателя: если создатель ушёл — назначаем
                        первого оставшегося участника новым создателем комнаты. */
