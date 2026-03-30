@@ -390,6 +390,39 @@ function showVideoInBox(id, stream, muted, isScreen) {
         video.classList.add("flip-h");
     }
     box.insertBefore(video, document.getElementById("label-" + id));
+
+    /* ── Страховочная сетка от "замороженного" видео ──────────────────
+       Если media-state задержался или потерялся, a видео-трек собеседника
+       был заглушён (replaceTrack на чёрный трек → браузер сигналит mute),
+       показываем аватар через 1.5 сек. Проверяем: видео ещё на экране
+       И cam-флаг выключен ИЛИ трек всё ещё muted через 1.5 сек.
+    ──────────────────────────────────────────────────────────────────── */
+    if (!muted && id !== "local" && !isScreen) {
+        const vt = stream.getVideoTracks()[0];
+        if (vt) {
+            vt.onmute = () => {
+                setTimeout(() => {
+                    /* Если через 1500 мс трек ещё muted И cam=false (media-state пришёл)
+                       ИЛИ трек ещё muted но media-state так и не пришёл → показываем аватар */
+                    const stillShowingVideo = document.getElementById("box-" + id)?.querySelector("video:not(.screen-video)");
+                    if (stillShowingVideo && vt.muted) {
+                        showAvatarInBox(id, peerMeta[id]?.avatar || "default");
+                        /* Обновляем peerMeta на случай если media-state не дошёл */
+                        if (peerMeta[id]) peerMeta[id].cam = false;
+                        updateLabelIcons(id, peerMeta[id]?.mic ?? false, false);
+                    }
+                }, 1500);
+            };
+            vt.onended = () => {
+                const stillShowingVideo = document.getElementById("box-" + id)?.querySelector("video:not(.screen-video)");
+                if (stillShowingVideo) {
+                    showAvatarInBox(id, peerMeta[id]?.avatar || "default");
+                    if (peerMeta[id]) peerMeta[id].cam = false;
+                    updateLabelIcons(id, peerMeta[id]?.mic ?? false, false);
+                }
+            };
+        }
+    }
 }
 
 function showAvatarInBox(id, userAvatar) {
@@ -675,13 +708,15 @@ if (chatBtn && sidebar) {
 /* ════════════════════════════════════════════
    ДОСТУП К КАМЕРЕ / МИКРОФОНУ
 ════════════════════════════════════════════ */
-async function startCamera(facing) {
+/* audioOnly=true — принудительно запрашиваем только аудио (вызов с кнопки mic
+   когда камера ещё не нужна; избегает лишнего диалога разрешений на камеру) */
+async function startCamera(facing, audioOnly = false) {
     if (cameraStarting) return;
     cameraStarting = true;
     const mode = facing || facingMode;
     let rawStream;
     try {
-        if (camEnabled) {
+        if (camEnabled && !audioOnly) {
             /* Нужно видео + аудио */
             try {
                 rawStream = await navigator.mediaDevices.getUserMedia({
@@ -704,7 +739,7 @@ async function startCamera(facing) {
                 }
             }
         } else {
-            /* Камера выключена — запрашиваем ТОЛЬКО аудио (не дёргаем камеру!) */
+            /* Камера выключена ИЛИ нужен только звук — запрашиваем ТОЛЬКО аудио */
             try {
                 rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (e) {
@@ -1440,7 +1475,10 @@ function setMicIcon() {
     micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
 }
 if (micBtn) micBtn.onclick = async () => {   /* #56 — null guard */
-    if (!localStream) { await startCamera(); if (!localStream) return; }
+    /* audioOnly=true: запрашиваем только микрофон, не спрашиваем разрешение на камеру.
+       Это исправляет баг на мобильных: при нажатии кнопки «Микрофон» браузер не
+       должен спрашивать разрешение на камеру — только на микрофон. */
+    if (!localStream) { await startCamera(undefined, /*audioOnly=*/true); if (!localStream) return; }
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => {
         t.enabled = micEnabled;
