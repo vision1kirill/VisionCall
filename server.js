@@ -68,18 +68,29 @@ app.get("/api/ice-servers", async (_req, res) => {
     const meteredKey    = process.env.METERED_API_KEY;
     const meteredDomain = process.env.METERED_DOMAIN; /* yourapp.metered.live */
     if (meteredKey && meteredDomain) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
         try {
             const url  = `https://${meteredDomain}/api/v1/turn/credentials?apiKey=${meteredKey}`;
-            const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            const resp = await fetch(url, { signal: controller.signal });
             if (resp.ok) {
                 const list = await resp.json();
-                if (Array.isArray(list)) iceServers.push(...list);
+                if (Array.isArray(list)) {
+                    iceServers.push(...list);
+                    console.log(`[ice] Metered: got ${list.length} servers`);
+                } else {
+                    console.warn("[ice] Metered: unexpected response format", list);
+                }
             } else {
-                console.warn(`[ice] Metered API ${resp.status}`);
+                console.warn(`[ice] Metered API error ${resp.status}`);
             }
         } catch (e) {
             console.warn("[ice] Metered fetch failed:", e.message);
+        } finally {
+            clearTimeout(timer);
         }
+    } else {
+        console.warn("[ice] METERED_API_KEY or METERED_DOMAIN not set");
     }
 
     /* ── Режим B: статичный TURN (любой провайдер) ── */
