@@ -181,19 +181,26 @@ function buildGainedStream(rawStream, gain) {
 }
 
 /* ── ICE СЕРВЕРЫ ── */
-const servers = {
+/* Кредыциалы TURN хранятся на сервере в env-переменных — никогда
+   не попадают в клиентский JS. Здесь только STUN как fallback. */
+let servers = {
     iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun.l.google.com:19302"  },
         { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject", credential: "openrelayproject" },
-        { urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject", credential: "openrelayproject" },
-        { urls: "turns:openrelay.metered.ca:443",
-          username: "openrelayproject", credential: "openrelayproject" }
     ]
 };
+
+/* Загружаем полный список ICE/TURN с сервера. Запрос быстрый
+   (тот же хост), завершится до того как понадобится PeerConnection. */
+fetch("/api/ice-servers")
+    .then(r => r.json())
+    .then(data => {
+        if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+            servers = { iceServers: data.iceServers };
+            console.log("[ice] loaded:", data.iceServers.length, "servers");
+        }
+    })
+    .catch(e => console.warn("[ice] fetch failed, using STUN only:", e));
 
 /* ════════════════════════════════════════════
    УЧАСТНИКИ

@@ -34,6 +34,71 @@ app.get("/api/online", (_req, res) => {
 });
 
 /* ════════════════════════════════════════════
+   ICE SERVERS — TURN кредыциалы никогда не
+   попадают в клиентский JS, только через этот
+   эндпоинт. Поддерживает два режима:
+
+   Режим A — Metered.ca (рекомендуется, 50 GB/мес бесплатно):
+     METERED_API_KEY=<ключ>
+     METERED_DOMAIN=<yourapp>.metered.live
+
+   Режим B — любой TURN-сервер (Twilio, coturn, Xirsys…):
+     TURN_URL=turn:your-server.com:3478
+     TURN_USERNAME=user
+     TURN_CREDENTIAL=password
+
+   Можно использовать оба одновременно.
+════════════════════════════════════════════ */
+let   _iceCache    = null;
+let   _iceCacheAt  = 0;
+const ICE_CACHE_MS = 50 * 60 * 1000; /* 50 минут — кредыциалы живут 1 час */
+
+app.get("/api/ice-servers", async (_req, res) => {
+    /* Отдаём кэш если свежий */
+    if (_iceCache && Date.now() - _iceCacheAt < ICE_CACHE_MS) {
+        return res.json({ iceServers: _iceCache });
+    }
+
+    const iceServers = [
+        { urls: "stun:stun.l.google.com:19302"  },
+        { urls: "stun:stun1.l.google.com:19302" },
+    ];
+
+    /* ── Режим A: Metered.ca — time-limited credentials ── */
+    const meteredKey    = process.env.METERED_API_KEY;
+    const meteredDomain = process.env.METERED_DOMAIN; /* yourapp.metered.live */
+    if (meteredKey && meteredDomain) {
+        try {
+            const url  = `https://${meteredDomain}/api/v1/turn/credentials?apiKey=${meteredKey}`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            if (resp.ok) {
+                const list = await resp.json();
+                if (Array.isArray(list)) iceServers.push(...list);
+            } else {
+                console.warn(`[ice] Metered API ${resp.status}`);
+            }
+        } catch (e) {
+            console.warn("[ice] Metered fetch failed:", e.message);
+        }
+    }
+
+    /* ── Режим B: статичный TURN (любой провайдер) ── */
+    const turnUrl  = process.env.TURN_URL;
+    const turnUser = process.env.TURN_USERNAME;
+    const turnCred = process.env.TURN_CREDENTIAL;
+    if (turnUrl && turnUser && turnCred) {
+        /* TURN_URL может содержать несколько URL через запятую */
+        const urls = turnUrl.split(",").map(u => u.trim()).filter(Boolean);
+        iceServers.push({ urls, username: turnUser, credential: turnCred });
+    }
+
+    _iceCache   = iceServers;
+    _iceCacheAt = Date.now();
+
+    res.json({ iceServers });
+});
+
+/* ════════════════════════════════════════════
    ХРАНИЛИЩЕ КОМНАТ
    Map вместо plain-object → нет prototype-pollution
 ════════════════════════════════════════════ */
