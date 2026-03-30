@@ -17,6 +17,7 @@ const io = new Server(server, {
     pingTimeout:  4000
 });
 
+app.use(express.urlencoded({ extended: false })); /* для sendBeacon POST-тела */
 app.use(express.static("public", {
     maxAge: "1h",
     setHeaders(res, path) {
@@ -26,6 +27,42 @@ app.use(express.static("public", {
         }
     }
 }));
+
+/* ════════════════════════════════════════════
+   /api/leave — HTTP endpoint для navigator.sendBeacon.
+   Браузер гарантирует доставку даже при закрытии страницы,
+   поэтому это надёжнее чем socket.emit("leave-room") в beforeunload.
+════════════════════════════════════════════ */
+app.post("/api/leave", (req, res) => {
+    const room      = sanitizeRoom(req.body?.room || "");
+    const sessionId = String(req.body?.session || "").replace(/[^\w]/g, "").slice(0, 64);
+    if (room && sessionId) {
+        const sessions = roomSessions.get(room);
+        if (sessions) {
+            const socketId = sessions.get(sessionId);
+            if (socketId) {
+                const sock    = io.sockets.sockets.get(socketId);
+                const members = rooms.get(room);
+                if (members && members.has(socketId)) {
+                    members.delete(socketId);
+                    io.to(room).emit("user-disconnected", { id: socketId });
+                    if (sock) { sock.data.room = null; sock.leave(room); }
+                    if (members.size === 0) {
+                        rooms.delete(room);
+                        roomSessions.delete(room);
+                    } else if (members._creator === socketId) {
+                        const newCreatorId = members.keys().next().value;
+                        members._creator = newCreatorId;
+                        io.to(room).emit("new-creator", { id: newCreatorId });
+                    }
+                }
+                sessions.delete(sessionId);
+            }
+        }
+        console.log(`[beacon-leave] room=${room} session=${sessionId}`);
+    }
+    res.status(204).end();
+});
 
 /* ── Health-check для Railway / любого балансировщика ── */
 app.get("/health", (_req, res) => {
@@ -190,7 +227,9 @@ io.on("connection", socket => {
                 const members   = rooms.get(room);
                 if (members && members.has(oldSocketId)) {
                     members.delete(oldSocketId);
-                    socket.to(room).emit("user-disconnected", { id: oldSocketId });
+                    /* ghost: true — подавляет тост "покинул" на клиенте,
+                       т.к. пользователь фактически переподключился */
+                    socket.to(room).emit("user-disconnected", { id: oldSocketId, ghost: true });
                     console.log(`[ghost] evicted old socket ${oldSocketId} for session ${sessionId}`);
                 }
                 if (oldSocket) { oldSocket.data.room = null; oldSocket.leave(room); }

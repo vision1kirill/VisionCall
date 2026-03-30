@@ -23,8 +23,8 @@ if (!name || name === "null") {
    TOAST — заменяет все alert()
 ════════════════════════════════════════════ */
 function showToast(msg, type = "error", duration = 5000) {
-    /* Убираем предыдущий тост того же типа */
-    document.querySelectorAll(".vc-toast").forEach(t => t.remove());
+    /* Убираем предыдущий тост ТОГО ЖЕ типа (не все сразу) */
+    document.querySelectorAll(`.vc-toast.vc-toast-${type}`).forEach(t => t.remove());
     const t = document.createElement("div");
     t.className = "vc-toast vc-toast-" + type;
     t.setAttribute("role", "alert");
@@ -95,6 +95,14 @@ let roomCreatorId = null;
 /* ── Состояние ── */
 let micEnabled    = initMic;
 let camEnabled    = initCam;
+
+/* ── Готовность медиапотока ──────────────────────────────────────
+   join-room откладывается до тех пор пока getUserMedia не вернётся.
+   Это устраняет гонку: собеседник не успевает подключиться до
+   того как localStream создан, и треки не теряются.
+──────────────────────────────────────────────────────────────── */
+let _streamReady    = false;
+let _joinPending    = false; /* join-room ждёт готовности потока */
 let screenEnabled = false;
 let facingMode    = "user";
 let cameraStarting = false;
@@ -584,22 +592,41 @@ async function startCamera(facing) {
     const mode = facing || facingMode;
     let rawStream;
     try {
-        try {
-            rawStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: mode }, audio: true
-            });
-        } catch (_) {
+        if (camEnabled) {
+            /* Нужно видео + аудио */
             try {
-                rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                rawStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: mode }, audio: true
+                });
+            } catch (_) {
+                try {
+                    rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                } catch (_2) {
+                    /* Камера недоступна — пробуем только аудио */
+                    try {
+                        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        camEnabled = false;
+                        setCamIcon();
+                        showToast("Камера недоступна — подключено только аудио.", "info", 5000);
+                    } catch (e) {
+                        showToast("Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
+                        return;
+                    }
+                }
+            }
+        } else {
+            /* Камера выключена — запрашиваем ТОЛЬКО аудио (не дёргаем камеру!) */
+            try {
+                rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (e) {
-                showToast("Браузер заблокировал доступ к камере или микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
+                showToast("Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
                 return;
             }
         }
         localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
         localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
         if (!camEnabled) {
-            /* Камера изначально выключена — сразу останавливаем видео-треки,
+            /* Камера выключена — останавливаем видео-треки (если вдруг есть),
                чтобы не горел аппаратный индикатор камеры. */
             localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
         } else {
@@ -796,17 +823,24 @@ function createPeer(id) {
                 delete peerAudioEls[id];
             }
         } else if (e.track.kind === "audio") {
-            const box          = document.getElementById("box-" + id);
+            const box           = document.getElementById("box-" + id);
             const existingVideo = box?.querySelector("video");
             if (!existingVideo) {
                 /* Камера выключена (или видео ещё не пришло) — нужен отдельный <audio> */
                 ensureRemoteAudio(id, e.streams[0]);
                 monitorSpeaking(id, e.streams[0]);
-            } else if (screenSharingPeers.has(id) && existingVideo.srcObject !== e.streams[0]) {
-                /* Аудио экрана пришло через addTrack (отдельный поток) — только для реальных шеров */
-                showRemoteScreenAudio(id, e.streams[0]);
+            } else if (existingVideo.srcObject !== e.streams[0]) {
+                /* Аудио в ДРУГОМ потоке нежели видео (например, видео-сендер был добавлен
+                   с пустым MediaStream, а аудио добавлено позже с localStream).
+                   Без явного <audio> звук бы потерялся — создаём его. */
+                if (screenSharingPeers.has(id)) {
+                    showRemoteScreenAudio(id, e.streams[0]);
+                } else {
+                    ensureRemoteAudio(id, e.streams[0]);
+                    monitorSpeaking(id, e.streams[0]);
+                }
             }
-            /* В остальных случаях аудио воспроизводит уже существующий <video> или <audio> */
+            /* Если streamId совпадает — аудио уже воспроизводит <video srcObject=stream> */
         }
     };
 
@@ -873,6 +907,16 @@ async function flushCandidates(id) {
 /* connect срабатывает как при первом подключении, так и при переподключении.
    При переподключении socket.id меняется — нужно заново войти в комнату
    и пересобрать все peer connections. */
+/* Внутренняя функция: отправить join-room если сокет подключён И поток готов */
+function _doJoinRoom() {
+    if (socket.connected && _streamReady) {
+        _joinPending = false;
+        socket.emit("join-room", { room, name, avatar, sessionId: vcSessionId });
+    } else {
+        _joinPending = true; /* выполним когда оба условия выполнятся */
+    }
+}
+
 socket.on("connect", () => {
     if (_joined) {
         /* ── Переподключение после разрыва ── */
@@ -901,6 +945,8 @@ socket.on("connect", () => {
         [...document.querySelectorAll(".video-box")].forEach(box => {
             const id = box.id.replace("box-", "");
             if (id === "local") return;
+            /* Останавливаем все таймеры и мониторы до удаления DOM */
+            stopQualityMonitor(id);                                          /* #bug12 — качество */
             if (speakingCancels[id]) { speakingCancels[id](); delete speakingCancels[id]; }
             if (speakTimers[id])     { clearTimeout(speakTimers[id]); delete speakTimers[id]; }
             if (reconnectTimers[id]) { clearTimeout(reconnectTimers[id]); delete reconnectTimers[id]; }
@@ -926,13 +972,17 @@ socket.on("connect", () => {
         /* Возобновляем AudioContext — браузер мог заморозить его во время разрыва */
         ensureAudioCtxRunning();
 
-        /* Повторно отправляем своё состояние микро/камеры через 2 сек
-           (peer connections ещё устанавливаются) */
-        setTimeout(() => emitMediaState(), 2_000);
+        /* При переподключении поток уже готов — сразу входим в комнату */
+        _joined = true;
+        socket.emit("join-room", { room, name, avatar, sessionId: vcSessionId });
+        /* Состояние медиа отправляем быстро (не ждём 2 сек) */
+        setTimeout(() => { emitMediaState(); updateLabelIcons("local", micEnabled, camEnabled); }, 500);
+        return;
     }
 
+    /* ── Первое подключение: ждём готовности медиапотока ── */
     _joined = true;
-    socket.emit("join-room", { room, name, avatar, sessionId: vcSessionId });
+    _doJoinRoom(); /* если поток уже готов — входим сразу, иначе _joinPending = true */
 });
 
 /* Уведомляем пользователя о потере соединения */
@@ -996,9 +1046,9 @@ socket.on("user-connected", async data => {
     /* #59 — Null check: data.id обязателен для создания peer connection */
     if (!data.id) return;
     showToast(`👋 ${data.name || "Участник"} присоединился к конференции`, "info", 4000);
-    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "cap" };
-    addParticipant(data.id, data.name, data.avatar || "cap", data.id === roomCreatorId);
-    createVideoBox(data.id, data.name, data.avatar || "cap");
+    peerMeta[data.id] = { name: data.name, avatar: data.avatar || "default", mic: false, cam: false };
+    addParticipant(data.id, data.name, data.avatar || "default", data.id === roomCreatorId);
+    createVideoBox(data.id, data.name, data.avatar || "default");
 
     const pc = createPeer(data.id);
 
@@ -1129,8 +1179,12 @@ socket.on("ice-candidate", async data => {
 });
 
 socket.on("user-disconnected", data => {
-    const leaveName = peerMeta[data.id]?.name || "Участник";
-    showToast(`${leaveName} покинул конференцию`, "info", 4000);
+    /* ghost: true — это было принудительное выселение дубля при переподключении;
+       не показываем тост «покинул» (пользователь фактически остаётся в комнате). */
+    if (!data.ghost) {
+        const leaveName = peerMeta[data.id]?.name || "Участник";
+        showToast(`${leaveName} покинул конференцию`, "info", 4000);
+    }
     removeVideoBox(data.id);
 });
 
@@ -1201,7 +1255,15 @@ function updateLabelIcons(id, micOn, camOn) {
 function emitMediaState() {
     socket.emit("media-state", { mic: micEnabled, cam: camEnabled });
 }
-socket.on("media-state", data => updateLabelIcons(data.from, data.mic, data.cam));
+socket.on("media-state", data => {
+    /* Сохраняем состояние в peerMeta — чтобы при пересоздании бокса
+       (переподключение) иконки сразу показывали правильное состояние */
+    if (peerMeta[data.from]) {
+        peerMeta[data.from].mic = data.mic;
+        peerMeta[data.from].cam = data.cam;
+    }
+    updateLabelIcons(data.from, data.mic, data.cam);
+});
 
 /* ════════════════════════════════════════════
    КНОПКА МИКРОФОН
@@ -1502,7 +1564,16 @@ if (leaveBtn) leaveBtn.onclick = () => {  /* #53 — null guard */
    нас из комнаты без ожидания ping timeout.
 ════════════════════════════════════════════ */
 function emitLeave() {
-    if (socket.connected) socket.emit("leave-room");
+    /* Попытка 1: WebSocket (быстро, но браузер может закрыть сокет раньше) */
+    try { if (socket.connected) socket.emit("leave-room"); } catch (e) {}
+    /* Попытка 2: sendBeacon — HTTP запрос, который браузер ГАРАНТИРУЕТ отправить
+       даже после закрытия страницы. Это надёжный fallback против "призраков". */
+    try {
+        if (typeof navigator.sendBeacon === "function") {
+            const body = new URLSearchParams({ room, session: vcSessionId });
+            navigator.sendBeacon("/api/leave", body);
+        }
+    } catch (e) {}
 }
 window.addEventListener("beforeunload", emitLeave);
 window.addEventListener("pagehide",     emitLeave);
@@ -1521,10 +1592,17 @@ if (copyBtn) {
     copyBtn.setAttribute("aria-label", "Поделиться ссылкой");
 }
 
-/* Если лобби включило камеру/микрофон — стартуем поток сразу */
+/* Стартуем медиапоток и только после этого входим в комнату.
+   Это устраняет гонку: join-room не отправляется пока localStream не готов,
+   поэтому у собеседников всегда будут треки при подключении. */
+function _onStreamReady() {
+    _streamReady = true;
+    if (_joinPending) _doJoinRoom(); /* сокет уже подключён — можно войти */
+}
+
 if (initMic || initCam) {
     startCamera().then(() => {
-        if (!localStream) return;
+        if (!localStream) { _onStreamReady(); return; }
         if (initMic) monitorSpeaking("local", localStream);
         if (initCam) {
             showVideoInBox("local", localStream, true, false);
@@ -1532,5 +1610,9 @@ if (initMic || initCam) {
         }
         updateLabelIcons("local", micEnabled, camEnabled);
         emitMediaState();
-    });
+        _onStreamReady();
+    }).catch(() => _onStreamReady()); /* ошибка — всё равно входим (без аудио) */
+} else {
+    /* Камера и микро выключены — поток не нужен, входим сразу */
+    _onStreamReady();
 }
