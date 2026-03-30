@@ -824,8 +824,19 @@ function createPeer(id) {
                и он может отличаться от пустой строки отправителя.
                Вместо этого используем media-state: если cam:false → аватар,
                если cam:true → видео. media-state приходит чуть позже чем
-               ontrack, поэтому изначально показываем аватар и ждём. */
-            if (peerMeta[id]?.cam) {
+               ontrack, поэтому изначально показываем аватар и ждём.
+               Исключение: если peer уже делится экраном (screen-share-state
+               пришёл раньше ontrack) — показываем поток как screen share. */
+            if (screenSharingPeers.has(id)) {
+                /* Демонстрация экрана: ontrack пришёл после screen-share-state */
+                showVideoInBox(id, e.streams[0], false, true);
+                monitorSpeaking(id, e.streams[0]);
+                if (peerAudioEls[id]) {
+                    peerAudioEls[id].srcObject = null;
+                    peerAudioEls[id].remove();
+                    delete peerAudioEls[id];
+                }
+            } else if (peerMeta[id]?.cam) {
                 showVideoInBox(id, e.streams[0], false, false);
                 monitorSpeaking(id, e.streams[0]);
                 /* Убираем audio-only элемент: теперь аудио воспроизводит <video> */
@@ -1057,6 +1068,12 @@ socket.on("room-users", data => {
         createVideoBox(user.id, user.name, user.avatar);
         createPeer(user.id);
     }
+
+    /* Отправляем наше состояние медиа существующим участникам после вхождения в комнату.
+       Без этого они не знают включена ли у нас камера/микрофон до следующего действия
+       (нажатия кнопки). Задержка 200 мс нужна чтобы сигнальный сервер успел
+       обработать join-room до рассылки media-state. */
+    setTimeout(() => emitMediaState(), 200);
 });
 
 socket.on("user-connected", async data => {
@@ -1218,11 +1235,28 @@ socket.on("new-creator", data => {
 socket.on("screen-share-state", data => {
     const box = document.getElementById("box-" + data.from);
     if (!box) return;
-    const vid = box.querySelector("video");
-    if (vid) vid.classList.toggle("screen-video", data.sharing);
 
     if (data.sharing) {
         screenSharingPeers.add(data.from);
+
+        const vid = box.querySelector("video");
+        if (!vid) {
+            /* Камера собеседника была выключена — нет video-элемента.
+               Создаём его из кэшированного потока чтобы показать экран. */
+            if (peerVideoStreams[data.from]) {
+                showVideoInBox(data.from, peerVideoStreams[data.from], false, true);
+                monitorSpeaking(data.from, peerVideoStreams[data.from]);
+                if (peerAudioEls[data.from]) {
+                    peerAudioEls[data.from].srcObject = null;
+                    peerAudioEls[data.from].remove();
+                    delete peerAudioEls[data.from];
+                }
+            }
+            /* Если пока нет потока — ontrack придёт позже и увидит screenSharingPeers */
+        } else {
+            vid.classList.add("screen-video");
+        }
+
         const sharerName = peerMeta[data.from]?.name || "Участник";
         showToast(`🖥 ${sharerName} начал демонстрацию экрана`, "info", 4000);
         /* Показываем слайдер громкости звука экрана для зрителей.
@@ -1257,6 +1291,16 @@ socket.on("screen-share-state", data => {
         /* Убираем слайдер громкости и любые устаревшие элементы screen audio */
         box.querySelector(".rsa-viewer-panel")?.remove();
         removeRemoteScreenAudio(data.from);
+        /* Восстанавливаем отображение: камера включена → убираем screen-video класс,
+           камера выключена → скрываем video и показываем аватар */
+        const currentVid = box.querySelector("video");
+        if (peerMeta[data.from]?.cam) {
+            if (currentVid) currentVid.classList.remove("screen-video");
+        } else {
+            /* Камера была выключена до и во время демонстрации экрана —
+               убираем video-элемент и возвращаем аватар */
+            showAvatarInBox(data.from, peerMeta[data.from]?.avatar || "default");
+        }
     }
 });
 
