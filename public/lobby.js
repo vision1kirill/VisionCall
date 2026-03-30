@@ -140,16 +140,27 @@ if (micGainSlider) micGainSlider.oninput = () => {
     if (gainNode) gainNode.gain.value = (parseInt(pct) || 0) / 100;  /* #25 — NaN guard */
 };
 
-/* ── Запрос потока ── */
-async function ensureStream() {
+/* ── Запрос потока ──
+   withVideo=false: запрашиваем только микрофон (кнопка "Микрофон").
+   withVideo=true:  запрашиваем камеру + микрофон (кнопка "Камера").
+   Не запрашиваем камеру без нужды — убираем лишний диалог разрешений на мобиле. */
+async function ensureStream(withVideo = true) {
     if (!localStream) {
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localStream = await navigator.mediaDevices.getUserMedia(
+                withVideo ? { video: true, audio: true } : { video: false, audio: true }
+            );
         } catch (e) {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            } catch (e2) {
-                if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
+            if (withVideo) {
+                /* Камера недоступна — пробуем только аудио */
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                } catch (e2) {
+                    if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
+                    return false;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
                 return false;
             }
         }
@@ -165,11 +176,12 @@ function showVideoPreview() {
         videoEl.autoplay    = true;
         videoEl.muted       = true;
         videoEl.playsInline = true;
-        videoEl.srcObject   = localStream;
         /* #27 — null guard: вставляем перед previewOff если он есть, иначе append */
         if (previewOff) previewDiv.insertBefore(videoEl, previewOff);
         else            previewDiv.appendChild(videoEl);
     }
+    /* Всегда обновляем srcObject — stream мог измениться (добавили видео-трек) */
+    videoEl.srcObject = localStream;
     if (previewOff) previewOff.style.display = "none";
     videoEl.style.display = "";
 }
@@ -188,7 +200,8 @@ function updateStatus() {
 
 /* ── Кнопка микрофона ── */
 if (micBtn) micBtn.onclick = async () => {   /* null guard */
-    const ok = await ensureStream();
+    /* withVideo=false: не запрашиваем камеру при включении микрофона */
+    const ok = await ensureStream(false);
     if (!ok) return;
     micEnabled = !micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
@@ -200,7 +213,8 @@ if (micBtn) micBtn.onclick = async () => {   /* null guard */
 
 /* ── Кнопка камеры ── */
 if (camBtn) camBtn.onclick = async () => {   /* null guard */
-    const ok = await ensureStream();
+    /* withVideo=true: для камеры нам нужен поток (создастся если нет) */
+    const ok = await ensureStream(true);
     if (!ok) return;
     camEnabled = !camEnabled;
 
@@ -210,14 +224,23 @@ if (camBtn) camBtn.onclick = async () => {   /* null guard */
         localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
         hideVideoPreview();
     } else {
-        /* Камера снова включается — запрашиваем новый трек */
-        try {
-            const vs = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            vs.getVideoTracks().forEach(t => { t.enabled = true; localStream.addTrack(t); });
+        /* Камера снова включается.
+           Если stream создавался audio-only (пользователь сначала включил mic),
+           запрашиваем новый video-трек и добавляем в существующий поток. */
+        const hasVideo = localStream.getVideoTracks().length > 0 &&
+                         localStream.getVideoTracks()[0].readyState === "live";
+        if (hasVideo) {
+            localStream.getVideoTracks().forEach(t => t.enabled = true);
             showVideoPreview();
-        } catch (e) {
-            camEnabled = false;
-            if (statusEl) statusEl.textContent = "⚠️ Не удалось включить камеру: " + e.message;
+        } else {
+            try {
+                const vs = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                vs.getVideoTracks().forEach(t => { t.enabled = true; localStream.addTrack(t); });
+                showVideoPreview();
+            } catch (e) {
+                camEnabled = false;
+                if (statusEl) statusEl.textContent = "⚠️ Не удалось включить камеру: " + e.message;
+            }
         }
     }
 

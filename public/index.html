@@ -144,6 +144,7 @@ function generateCode() {
 
 function getNickname(inputId) {
     const input = document.getElementById(inputId);
+    if (!input) return null;   /* null guard: элемент может отсутствовать */
     const name  = input.value.trim();
     if (!name) {
         input.classList.add("input-error");

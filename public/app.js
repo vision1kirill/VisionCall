@@ -128,8 +128,9 @@ let camEnabled    = initCam;
 ──────────────────────────────────────────────────────────────── */
 let _streamReady    = false;
 let _joinPending    = false; /* join-room ждёт готовности потока */
-let screenEnabled = false;
-let facingMode    = "user";
+let screenEnabled  = false;
+let screenStarting = false; /* защита от двойного нажатия кнопки экрана */
+let facingMode     = "user";
 let cameraStarting = false;
 
 /* ── ICE-кандидаты, пришедшие до remoteDescription ── */
@@ -162,6 +163,8 @@ let _blackCanvas = null;
 let _blackTrack  = null;
 function getBlackVideoTrack() {
     if (_blackTrack && _blackTrack.readyState === "live") return _blackTrack;
+    /* Stop stale track to release resources before creating a new one */
+    if (_blackTrack) { try { _blackTrack.stop(); } catch (e) {} _blackTrack = null; }
     if (!_blackCanvas) {
         _blackCanvas = Object.assign(document.createElement("canvas"), { width: 2, height: 2 });
         _blackCanvas.getContext("2d").fillRect(0, 0, 2, 2);
@@ -462,7 +465,7 @@ function ensureRemoteAudio(id, stream) {
 function removeVideoBox(id) {
     screenSharingPeers.delete(id);
     /* Останавливаем speaking monitor */
-    if (speakingCancels[id]) { speakingCancels[id](); delete speakingCancels[id]; }
+    if (speakingCancels[id]) { try { speakingCancels[id](); } catch (e) {} delete speakingCancels[id]; }
     /* Убираем speaking-таймер */
     if (speakTimers[id]) { clearTimeout(speakTimers[id]); delete speakTimers[id]; }
     /* Отменяем отложенный ICE-рестарт */
@@ -485,12 +488,22 @@ function removeVideoBox(id) {
     }
     box?.remove();
     removeParticipant(id);
-    peerConnections[id]?.close();
+    /* Удаляем из Map ДО закрытия PC — иначе onconnectionstatechange("closed") может
+       вызвать removeVideoBox повторно (проверка peerConnections[id] === pc будет false). */
+    const pc = peerConnections[id];
     delete peerConnections[id];
     delete makingOffer[id];
     delete peerMeta[id];
     delete pendingCandidates[id];
     delete peerVideoStreams[id];
+    if (pc) {
+        /* Обнуляем колбэки перед закрытием — предотвращаем stale-события */
+        pc.ontrack = null;
+        pc.onicecandidate = null;
+        pc.onconnectionstatechange = null;
+        pc.onnegotiationneeded = null;
+        try { pc.close(); } catch (e) {}
+    }
     updateGridLayout();
 }
 
@@ -598,15 +611,23 @@ function monitorSpeaking(id, stream) {
 
         speakingCancels[id] = () => {
             cancelled = true;
-            cancelAnimationFrame(rafId);
-            try { source.disconnect(); }   catch (e) {}
-            try { analyser.disconnect(); } catch (e) {}
+            try { cancelAnimationFrame(rafId); } catch (e) {}
+            try { source.disconnect(); }         catch (e) {}
+            try { analyser.disconnect(); }       catch (e) {}
         };
 
         function check() {
             if (cancelled) return;
             const box = document.getElementById("box-" + id);
-            if (!box) { speakingCancels[id]?.(); return; }
+            if (!box) {
+                /* Бокс был удалён — останавливаем монитор */
+                cancelled = true;
+                try { cancelAnimationFrame(rafId); } catch (e) {}
+                try { source.disconnect(); }         catch (e) {}
+                try { analyser.disconnect(); }       catch (e) {}
+                delete speakingCancels[id];
+                return;
+            }
             analyser.getByteFrequencyData(data);
             let sum = 0;
             for (let i = 0; i < data.length; i++) sum += data[i];
@@ -669,13 +690,29 @@ if (copyBtn) {
             copyBtn.setAttribute("aria-label", "Поделиться ссылкой");
             copyBtn.classList.remove("copy-success");
         }, 2000);
-        navigator.clipboard.writeText(url).then(() => {
-            copyBtn.innerHTML = ICONS.copied;
-            copyBtn.setAttribute("aria-label", "Ссылка скопирована");
-            copyBtn.classList.add("copy-success");
-            showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
-            restore();
-        }).catch(() => {
+        const clipboardPromise = navigator.clipboard?.writeText(url);
+        if (clipboardPromise) {
+            clipboardPromise.then(() => {
+                copyBtn.innerHTML = ICONS.copied;
+                copyBtn.setAttribute("aria-label", "Ссылка скопирована");
+                copyBtn.classList.add("copy-success");
+                showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
+                restore();
+            }).catch(() => {
+                try {
+                    const inp = document.createElement("input");
+                    inp.value = url; document.body.appendChild(inp); inp.select();
+                    document.execCommand("copy"); inp.remove();
+                    copyBtn.innerHTML = ICONS.copied;
+                    copyBtn.classList.add("copy-success");
+                    showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
+                    restore();
+                } catch (_) {
+                    showToast("Не удалось скопировать ссылку автоматически. Скопируйте адрес из строки браузера вручную.", "error");
+                }
+            });
+        } else {
+            /* clipboard API недоступен (HTTP) — используем execCommand */
             try {
                 const inp = document.createElement("input");
                 inp.value = url; document.body.appendChild(inp); inp.select();
@@ -687,7 +724,7 @@ if (copyBtn) {
             } catch (_) {
                 showToast("Не удалось скопировать ссылку автоматически. Скопируйте адрес из строки браузера вручную.", "error");
             }
-        });
+        }
     };
 }
 
@@ -865,7 +902,7 @@ function stopQualityMonitor(id) {
 
 async function updateQualityIndicator(id, pc) {
     const el = document.getElementById("quality-" + id);
-    if (!el || pc.connectionState === "closed") { stopQualityMonitor(id); return; }
+    if (!el || !pc || pc.connectionState === "closed") { stopQualityMonitor(id); return; }
     try {
         const stats = await pc.getStats();
         let rtt = null, lost = 0, total = 0;
@@ -933,6 +970,8 @@ function createPeer(id) {
         }
 
         if (e.track.kind === "video") {
+            /* Guard: track без stream (нестандартная ситуация — пропускаем) */
+            if (!e.streams || !e.streams[0]) return;
             /* Сохраняем поток — нужен если media-state(cam:true) придёт позже */
             peerVideoStreams[id] = e.streams[0];
 
@@ -967,6 +1006,8 @@ function createPeer(id) {
                 showAvatarInBox(id, meta.avatar);
             }
         } else if (e.track.kind === "audio") {
+            /* Guard: track без stream */
+            if (!e.streams || !e.streams[0]) return;
             const box           = document.getElementById("box-" + id);
             const existingVideo = box?.querySelector("video");
             if (!existingVideo) {
@@ -1022,7 +1063,7 @@ function createPeer(id) {
         }
 
         /* #76 — Проверяем что PC не закрыт перед restartIce (иначе DOMException) */
-    if (state === "failed" && pc.signalingState !== "closed") pc.restartIce();
+        if (state === "failed" && pc.signalingState !== "closed") pc.restartIce();
         /* Проверяем что этот PC всё ещё «текущий» для данного peer-а,
            чтобы stale-ивент закрытого старого соединения не убрал новый бокс. */
         if (state === "closed" && peerConnections[id] === pc) removeVideoBox(id);
@@ -1082,8 +1123,17 @@ socket.on("connect", () => {
             }
         }
 
-        /* Закрываем все существующие peer connections */
-        Object.values(peerConnections).forEach(pc => { try { pc.close(); } catch (e) {} });
+        /* Закрываем все существующие peer connections.
+           Обнуляем колбэки ДО закрытия — stale-события не должны вызывать removeVideoBox. */
+        Object.values(peerConnections).forEach(pc => {
+            try {
+                pc.ontrack = null;
+                pc.onicecandidate = null;
+                pc.onconnectionstatechange = null;
+                pc.onnegotiationneeded = null;
+                pc.close();
+            } catch (e) {}
+        });
 
         /* Убираем все чужие видео-боксы и панели */
         [...document.querySelectorAll(".video-box")].forEach(box => {
@@ -1314,25 +1364,27 @@ socket.on("ice-candidate", async data => {
         /* #43 — Логируем ошибку addIceCandidate (silent fail скрывал ICE-проблемы) */
         try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn("addIceCandidate:", e); }
     } else {
-        if (!pendingCandidates[data.from]) pendingCandidates[data.from] = [];
-        /* Cap: не храним больше 50 кандидатов (защита от флуда) */
-        if (pendingCandidates[data.from].length < 50) {
-            pendingCandidates[data.from].push(data.candidate);
-        }
-        /* Защита от утечки памяти: чистим очередь если remoteDescription
-           так и не установился в течение 10 сек (например, peer отключился). */
-        if (pendingCandidates[data.from].length === 1) {
+        if (!pendingCandidates[data.from]) {
+            pendingCandidates[data.from] = [];
+            /* Запускаем таймер очистки при создании новой очереди.
+               Кандидаты могут прийти в любое время — таймер защищает от утечки,
+               если remoteDescription так и не установился (peer отключился). */
             setTimeout(() => {
                 if (pendingCandidates[data.from]) {
-                    console.warn("pendingCandidates cleanup for", data.from);
+                    console.warn("[ice] pendingCandidates timeout cleanup for", data.from);
                     delete pendingCandidates[data.from];
                 }
             }, 10_000);
+        }
+        /* Cap: не храним больше 50 кандидатов (защита от флуда) */
+        if (pendingCandidates[data.from].length < 50) {
+            pendingCandidates[data.from].push(data.candidate);
         }
     }
 });
 
 socket.on("user-disconnected", data => {
+    if (!data.id) return;
     /* ghost: true — это было принудительное выселение дубля при переподключении;
        не показываем тост «покинул» (пользователь фактически остаётся в комнате). */
     if (!data.ghost) {
@@ -1353,6 +1405,7 @@ socket.on("new-creator", data => {
 });
 
 socket.on("screen-share-state", data => {
+    if (!data.from) return;
     const box = document.getElementById("box-" + data.from);
     if (!box) return;
 
@@ -1437,13 +1490,16 @@ function emitMediaState() {
     socket.emit("media-state", { mic: micEnabled, cam: camEnabled });
 }
 socket.on("media-state", data => {
+    if (!data.from) return;
     const prevCam = peerMeta[data.from]?.cam;
 
-    /* Сохраняем состояние в peerMeta */
-    if (peerMeta[data.from]) {
-        peerMeta[data.from].mic = data.mic;
-        peerMeta[data.from].cam = data.cam;
+    /* Инициализируем peerMeta если media-state пришёл раньше user-connected
+       (гонка: оба события могут прийти в любом порядке) */
+    if (!peerMeta[data.from]) {
+        peerMeta[data.from] = { name: "Участник", avatar: "default", mic: false, cam: false };
     }
+    peerMeta[data.from].mic = data.mic;
+    peerMeta[data.from].cam = data.cam;
     updateLabelIcons(data.from, data.mic, data.cam);
 
     /* Переключаем аватар ↔ видео если состояние камеры изменилось */
@@ -1475,6 +1531,9 @@ function setMicIcon() {
     micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
 }
 if (micBtn) micBtn.onclick = async () => {   /* #56 — null guard */
+    /* Возобновляем AudioContext при первом пользовательском жесте.
+       На iOS/Safari AudioContext требует явного gesture для resume после создания. */
+    ensureAudioCtxRunning();
     /* audioOnly=true: запрашиваем только микрофон, не спрашиваем разрешение на камеру.
        Это исправляет баг на мобильных: при нажатии кнопки «Микрофон» браузер не
        должен спрашивать разрешение на камеру — только на микрофон. */
@@ -1503,6 +1562,7 @@ function setCamIcon() {
     camBtn.setAttribute("aria-pressed", camEnabled ? "true" : "false");
 }
 if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
+    ensureAudioCtxRunning();
     if (!localStream) { await startCamera(); if (!localStream) return; }
     camEnabled = !camEnabled;
 
@@ -1607,6 +1667,9 @@ function hideScreenAudioPanel() {
 }
 
 if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
+    ensureAudioCtxRunning();
+    /* Защита от двойного нажатия: getDisplayMedia ещё не завершился */
+    if (screenStarting) return;
     if (screenEnabled) {
         /* ── Остановка демонстрации ── */
         screenStream?.getTracks().forEach(t => t.stop());
@@ -1619,17 +1682,17 @@ if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
 
         /* Убираем WebAudio-микс: возвращаем исходный мик-трек */
         if (screenAudioMix) {
-            try { screenAudioMix.micSrc?.disconnect(); } catch (e) {}
+            try { screenAudioMix.micSrc?.disconnect(); }    catch (e) {}
             try { screenAudioMix.screenSrc?.disconnect(); } catch (e) {}
             try { screenAudioMix.screenGain?.disconnect(); } catch (e) {}
             screenAudioMix = null;
-            /* replaceTrack обратно на исходный микрофон — без рenegotiации */
-            const micTrack = localStream?.getAudioTracks()[0];
-            if (micTrack) {
-                for (const [, pc] of Object.entries(peerConnections)) {
-                    const s = pc.getSenders().find(s => s.track?.kind === "audio");
-                    if (s) s.replaceTrack(micTrack).catch(() => {});
-                }
+            /* replaceTrack обратно на исходный микрофон — без рenegotiации.
+               Если мик-трека нет (пользователь никогда не включал микрофон),
+               заменяем на null чтобы освободить WebAudio-ресурсы у отправителя. */
+            const micTrack = localStream?.getAudioTracks()[0] ?? null;
+            for (const [, pc] of Object.entries(peerConnections)) {
+                const s = pc.getSenders().find(s => s.track?.kind === "audio");
+                if (s) s.replaceTrack(micTrack).catch(() => {});
             }
         }
 
@@ -1655,6 +1718,7 @@ if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
         return;
     }
 
+    screenStarting = true;
     try {
         /* Ограничиваем fps демонстрации экрана — 15 fps вместо 30.
            Слайды и документы выглядят одинаково хорошо при 15 fps,
@@ -1735,14 +1799,28 @@ if (screenBtn) screenBtn.onclick = async () => {   /* #58 — null guard */
         }
 
         showVideoInBox("local", screenStream, true, true);
-        /* #47 — Optional chaining: screenBtn может не существовать */
-        screenTrack.onended = () => { if (screenEnabled) screenBtn?.click(); };
+        /* Когда пользователь останавливает демонстрацию из системного UI (не нашей кнопкой)
+           — продублируем логику остановки на случай если screenBtn недоступен */
+        screenTrack.onended = () => {
+            if (!screenEnabled) return;
+            if (screenBtn) {
+                screenBtn.click();
+            } else {
+                /* Fallback: screenBtn отсутствует — останавливаем напрямую */
+                screenEnabled = false;
+                setScreenIcon();
+                socket.emit("screen-share-state", { sharing: false });
+                hideScreenAudioPanel();
+            }
+        };
     } catch (e) {
         if (e.name === "NotAllowedError") {
             showToast("Демонстрация экрана отменена.", "info", 3000);
         } else {
             showToast("Не удалось начать демонстрацию экрана. Попробуйте ещё раз или перезагрузите страницу.", "error");
         }
+    } finally {
+        screenStarting = false;
     }
 };
 
