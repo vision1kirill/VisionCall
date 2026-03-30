@@ -306,6 +306,19 @@ function createVideoBox(id, username, userAvatar) {
     label.innerHTML = makeLabelHTML(username, false, false);
     box.appendChild(label);
 
+    /* Индикатор качества соединения (только для remote участников) */
+    if (id !== "local") {
+        const qi = document.createElement("div");
+        qi.className = "quality-indicator quality-unknown";
+        qi.id = "quality-" + id;
+        qi.title = "Измеряется...";
+        qi.innerHTML =
+            '<span class="qbar qbar1"></span>' +
+            '<span class="qbar qbar2"></span>' +
+            '<span class="qbar qbar3"></span>';
+        box.appendChild(qi);
+    }
+
     videoGrid.appendChild(box);
     updateGridLayout();
 }
@@ -378,6 +391,8 @@ function removeVideoBox(id) {
     if (speakTimers[id]) { clearTimeout(speakTimers[id]); delete speakTimers[id]; }
     /* Отменяем отложенный ICE-рестарт */
     if (reconnectTimers[id]) { clearTimeout(reconnectTimers[id]); delete reconnectTimers[id]; }
+    /* Останавливаем индикатор качества */
+    stopQualityMonitor(id);
     /* Убираем audio-only элемент */
     if (peerAudioEls[id]) {
         peerAudioEls[id].srcObject = null;
@@ -669,6 +684,62 @@ function removeRemoteScreenAudio(id) {
 }
 
 /* ════════════════════════════════════════════
+   ИНДИКАТОР КАЧЕСТВА СОЕДИНЕНИЯ
+   Опрашивает RTCStatsReport каждые 4 сек.
+   Показывает RTT и потери аудио-пакетов.
+════════════════════════════════════════════ */
+const qualityTimers = {};
+
+function startQualityMonitor(id, pc) {
+    stopQualityMonitor(id);
+    updateQualityIndicator(id, pc);
+    qualityTimers[id] = setInterval(() => updateQualityIndicator(id, pc), 4000);
+}
+
+function stopQualityMonitor(id) {
+    if (qualityTimers[id]) { clearInterval(qualityTimers[id]); delete qualityTimers[id]; }
+    const el = document.getElementById("quality-" + id);
+    if (el) { el.className = "quality-indicator quality-unknown"; el.title = ""; }
+}
+
+async function updateQualityIndicator(id, pc) {
+    const el = document.getElementById("quality-" + id);
+    if (!el || pc.connectionState === "closed") { stopQualityMonitor(id); return; }
+    try {
+        const stats = await pc.getStats();
+        let rtt = null, lost = 0, total = 0;
+
+        stats.forEach(r => {
+            /* RTT из активной (nominated) ICE-пары */
+            if (r.type === "candidate-pair" && r.nominated && r.currentRoundTripTime != null) {
+                rtt = r.currentRoundTripTime * 1000; /* секунды → мс */
+            }
+            /* Потери аудио-пакетов */
+            if (r.type === "inbound-rtp" && r.kind === "audio") {
+                lost  += r.packetsLost     || 0;
+                total += (r.packetsReceived || 0) + (r.packetsLost || 0);
+            }
+        });
+
+        const loss = total > 0 ? lost / total : 0;
+
+        let level, label;
+        if (rtt === null) {
+            level = "unknown"; label = "Измеряется...";
+        } else if (rtt < 150 && loss < 0.03) {
+            level = "good";  label = `Хорошее · ${Math.round(rtt)} мс`;
+        } else if (rtt < 300 && loss < 0.10) {
+            level = "fair";  label = `Среднее · ${Math.round(rtt)} мс`;
+        } else {
+            level = "poor";  label = `Плохое · ${Math.round(rtt)} мс`;
+        }
+
+        el.className = "quality-indicator quality-" + level;
+        el.title = label;
+    } catch (_) { /* PC закрыт — не страшно */ }
+}
+
+/* ════════════════════════════════════════════
    PEER CONNECTION (perfect negotiation)
 ════════════════════════════════════════════ */
 function createPeer(id) {
@@ -735,6 +806,13 @@ function createPeer(id) {
 
     pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
+
+        /* Запускаем/останавливаем индикатор качества */
+        if (state === "connected" || state === "completed") {
+            startQualityMonitor(id, pc);
+        } else if (state === "disconnected" || state === "failed" || state === "closed") {
+            stopQualityMonitor(id);
+        }
 
         if (state === "disconnected") {
             /* По умолчанию браузер ждёт до 30 сек перед переходом в "failed".

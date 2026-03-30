@@ -626,7 +626,45 @@ body.lobby-page {
     z-index: 3;
 }
 
-/* ── Speaking indicator ── */
+/* ── Connection quality indicator ── */
+.quality-indicator {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    padding: 4px 5px 3px;
+    background: rgba(0,0,0,0.55);
+    border-radius: 6px;
+    z-index: 4;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+}
+.qbar {
+    width: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.18);
+    transition: background 0.4s, opacity 0.4s;
+}
+.qbar1 { height: 4px; }
+.qbar2 { height: 8px; }
+.qbar3 { height: 12px; }
+
+/* Хорошее — все три зелёные */
+.quality-good .qbar { background: #22c55e; }
+
+/* Среднее — две жёлтые, третья серая */
+.quality-fair .qbar1,
+.quality-fair .qbar2 { background: #f59e0b; }
+.quality-fair .qbar3 { background: rgba(255,255,255,0.18); }
+
+/* Плохое — одна красная, остальные серые */
+.quality-poor .qbar1 { background: #ef4444; }
+.quality-poor .qbar2,
+.quality-poor .qbar3 { background: rgba(255,255,255,0.18); }
+
+/* Speaking indicator ── */
 .video-box.speaking {
     box-shadow: 0 0 0 2.5px var(--green), 0 0 18px 2px var(--green-glow);
     border-color: transparent;
