@@ -204,6 +204,73 @@ function getSilentAudioTrack() {
     }
 }
 
+/* ════════════════════════════════════════════
+   ЗВУКОВЫЕ СИГНАЛЫ — Discord-style
+   Генерируются через Web Audio API без внешних файлов.
+════════════════════════════════════════════ */
+let _sfxCtx = null;
+function _getSfxCtx() {
+    if (!_sfxCtx || _sfxCtx.state === "closed") {
+        _sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (_sfxCtx.state === "suspended") _sfxCtx.resume().catch(() => {});
+    return _sfxCtx;
+}
+
+/* Звук входа участника: два восходящих тона (как в Discord) */
+function playSfxJoin() {
+    try {
+        const ctx  = _getSfxCtx();
+        const now  = ctx.currentTime;
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+
+        [[440, 0.00, 0.12], [660, 0.14, 0.18]].forEach(([freq, start, dur]) => {
+            const osc = ctx.createOscillator();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            osc.start(now + start);
+            osc.stop(now + start + dur);
+        });
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.02);
+        gain.gain.setValueAtTime(0.25, now + 0.12);
+        gain.gain.linearRampToValueAtTime(0, now + 0.14);
+        gain.gain.setValueAtTime(0, now + 0.14);
+        gain.gain.linearRampToValueAtTime(0.22, now + 0.17);
+        gain.gain.linearRampToValueAtTime(0, now + 0.32);
+    } catch (e) { /* AudioContext недоступен */ }
+}
+
+/* Звук выхода участника: два нисходящих тона (как в Discord) */
+function playSfxLeave() {
+    try {
+        const ctx  = _getSfxCtx();
+        const now  = ctx.currentTime;
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+
+        [[660, 0.00, 0.12], [440, 0.14, 0.18]].forEach(([freq, start, dur]) => {
+            const osc = ctx.createOscillator();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            osc.start(now + start);
+            osc.stop(now + start + dur);
+        });
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.22, now + 0.02);
+        gain.gain.setValueAtTime(0.22, now + 0.12);
+        gain.gain.linearRampToValueAtTime(0, now + 0.14);
+        gain.gain.setValueAtTime(0, now + 0.14);
+        gain.gain.linearRampToValueAtTime(0.18, now + 0.17);
+        gain.gain.linearRampToValueAtTime(0, now + 0.32);
+    } catch (e) { /* AudioContext недоступен */ }
+}
+
 /* ── AudioContext ── */
 let audioCtx    = null;
 let micGainNode = null;
@@ -1296,6 +1363,7 @@ socket.on("room-users", data => {
 socket.on("user-connected", async data => {
     /* #59 — Null check: data.id обязателен для создания peer connection */
     if (!data.id) return;
+    playSfxJoin();
     showToast(`👋 ${data.name || "Участник"} присоединился к конференции`, "info", 4000);
     peerMeta[data.id] = { name: data.name, avatar: data.avatar || "default", mic: false, cam: false };
     addParticipant(data.id, data.name, data.avatar || "default", data.id === roomCreatorId);
@@ -1450,6 +1518,7 @@ socket.on("user-disconnected", data => {
     /* ghost: true — это было принудительное выселение дубля при переподключении;
        не показываем тост «покинул» (пользователь фактически остаётся в комнате). */
     if (!data.ghost) {
+        playSfxLeave();
         const leaveName = peerMeta[data.id]?.name || "Участник";
         showToast(`${leaveName} покинул конференцию`, "info", 4000);
     }
