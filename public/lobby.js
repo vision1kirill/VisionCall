@@ -535,7 +535,7 @@ if (joinBtn) joinBtn.onclick = () => {   /* null guard */
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; }
     const gain = micGainSlider?.value ?? 100;  /* #28 — null-safe value */
-    window.location.href = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name.slice(0, 64))}&avatar=${encodeURIComponent(avatar)}&mic=${micEnabled ? 1 : 0}&cam=${camEnabled ? 1 : 0}&micGain=${gain}`;
+    window.location.href = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name.slice(0, 64))}&avatar=${encodeURIComponent(avatar)}&mic=${micEnabled ? 1 : 0}&cam=${camEnabled ? 1 : 0}&micGain=${gain}&noise=${noiseEnabled ? 1 : 0}`;
 };
 
 /* ── Инициализация ── */

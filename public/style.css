@@ -1196,10 +1196,7 @@ video.flip-h { transform: scaleX(-1); }
     padding-bottom: env(safe-area-inset-bottom, 0px);
     height: calc(86px + env(safe-area-inset-bottom, 0px));
 }
-.main {
-    /* Учитываем topbar + controls с безопасными зонами */
-    padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-}
+/* .main не нуждается в padding-bottom — .controls в нормальном потоке flex-колонки */
 
 /* ═══════════════════════════════════════
    LANDSCAPE — оптимизация горизонтального режима
@@ -1208,7 +1205,6 @@ video.flip-h { transform: scaleX(-1); }
     .topbar { height: 44px; }
     .controls { height: calc(64px + env(safe-area-inset-bottom, 0px)); }
     .controls button { width: 44px; height: 44px; }
-    .main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ═══════════════════════════════════════

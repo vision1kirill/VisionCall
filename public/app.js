@@ -6,7 +6,8 @@ const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
 /* #40 — NaN guard: parseInt("abc") = NaN → NaN/100 = NaN → Math.max/min пропускают NaN.
    Добавляем || 100 чтобы получить безопасное значение по умолчанию. */
-const initGain = Math.max(0, Math.min(2, (parseInt(params.get("micGain") || "100") || 100) / 100));
+const initGain  = Math.max(0, Math.min(2, (parseInt(params.get("micGain") || "100") || 100) / 100));
+const initNoise = params.get("noise") !== "0"; /* по умолчанию шумоподавление включено */
 
 /* #39 — Без комнаты → на главную (name проверяется ниже) */
 if (!room) {
@@ -50,6 +51,8 @@ const ICONS = {
     screenOff: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
     copyLink: `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
     copied:    `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    noiseOn:   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/><path d="M3 12h3"/><path d="M18 12h3"/></svg>`,
+    noiseOff:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/><path d="M3 12h3"/><path d="M18 12h3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>`,
     labelMicOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
     labelMicOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
     labelCamOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
@@ -98,6 +101,7 @@ const micBtn    = document.getElementById("micBtn");
 const camBtn    = document.getElementById("camBtn");
 const flipBtn   = document.getElementById("flipBtn");
 const screenBtn = document.getElementById("screenBtn");
+const noiseBtn  = document.getElementById("noiseBtn");
 const leaveBtn  = document.getElementById("leaveBtn");
 const chatBtn   = document.getElementById("chatBtn");
 const copyBtn   = document.getElementById("copyBtn");
@@ -120,6 +124,10 @@ let roomCreatorId = null;
 /* ── Состояние ── */
 let micEnabled    = initMic;
 let camEnabled    = initCam;
+let noiseEnabled  = initNoise;
+
+/* Сырой поток getUserMedia — нужен для перезапуска с новыми настройками шума */
+let _rawMicStream = null;
 
 /* ── Готовность медиапотока ──────────────────────────────────────
    join-room откладывается до тех пор пока getUserMedia не вернётся.
@@ -891,21 +899,27 @@ async function startCamera(facing, audioOnly = false) {
     if (cameraStarting) return;
     cameraStarting = true;
     const mode = facing || facingMode;
+    /* Передаём текущие настройки шумоподавления в getUserMedia */
+    const audioConstraints = {
+        noiseSuppression: noiseEnabled,
+        echoCancellation: noiseEnabled,
+        autoGainControl:  noiseEnabled,
+    };
     let rawStream;
     try {
         if (camEnabled && !audioOnly) {
             /* Нужно видео + аудио */
             try {
                 rawStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: mode }, audio: true
+                    video: { facingMode: mode }, audio: audioConstraints
                 });
             } catch (_) {
                 try {
-                    rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
                 } catch (_2) {
                     /* Камера недоступна — пробуем только аудио */
                     try {
-                        rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
                         camEnabled = false;
                         setCamIcon();
                         showToast("Камера недоступна — подключено только аудио.", "info", 5000);
@@ -918,12 +932,14 @@ async function startCamera(facing, audioOnly = false) {
         } else {
             /* Камера выключена ИЛИ нужен только звук — запрашиваем ТОЛЬКО аудио */
             try {
-                rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
             } catch (e) {
                 showToast("Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
                 return;
             }
         }
+        /* Сохраняем сырой поток для последующего перезапуска с новыми настройками шума */
+        _rawMicStream = rawStream;
         localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
         localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
         if (!camEnabled) {
@@ -1798,6 +1814,79 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
 if (flipBtn) { flipBtn.onclick = () => switchCamera(); }
 
 /* ════════════════════════════════════════════
+   КНОПКА ШУМОПОДАВЛЕНИЕ
+════════════════════════════════════════════ */
+function setNoiseIcon() {
+    if (!noiseBtn) return;
+    noiseBtn.innerHTML = noiseEnabled ? ICONS.noiseOn : ICONS.noiseOff;
+    noiseBtn.className = noiseEnabled ? "btn-active" : "btn-inactive";
+    noiseBtn.setAttribute("aria-label", noiseEnabled ? "Шумоподавление включено" : "Шумоподавление выключено");
+    noiseBtn.setAttribute("aria-pressed", noiseEnabled ? "true" : "false");
+    noiseBtn.title = noiseEnabled
+        ? "Шумоподавление включено — нажмите, чтобы выключить"
+        : "Шумоподавление выключено — нажмите, чтобы включить";
+}
+
+if (noiseBtn) noiseBtn.onclick = async () => {
+    noiseEnabled = !noiseEnabled;
+    setNoiseIcon();
+
+    /* Если микрофон ещё не активирован — просто запоминаем настройку */
+    if (!localStream || !micEnabled) return;
+
+    const audioConstraints = {
+        noiseSuppression: noiseEnabled,
+        echoCancellation: noiseEnabled,
+        autoGainControl:  noiseEnabled,
+    };
+
+    try {
+        /* Запрашиваем новый поток с новыми настройками шума */
+        const newRaw = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+        /* Останавливаем старый сырой поток */
+        if (_rawMicStream) {
+            _rawMicStream.getAudioTracks().forEach(t => t.stop());
+        }
+        _rawMicStream = newRaw;
+
+        /* Получаем новый трек (с учётом gain-ноды если gain != 1) */
+        let newAudioTrack;
+        const oldAudioTrack = localStream.getAudioTracks()[0];
+
+        if (initGain !== 1 && audioCtx && audioCtx.state !== "closed") {
+            /* Перестраиваем WebAudio-граф с новым источником */
+            if (micGainNode) { try { micGainNode.disconnect(); } catch (_) {} micGainNode = null; }
+            const newGained = buildGainedStream(newRaw, initGain);
+            newAudioTrack = newGained.getAudioTracks()[0];
+        } else {
+            newAudioTrack = newRaw.getAudioTracks()[0];
+        }
+
+        if (newAudioTrack) {
+            newAudioTrack.enabled = micEnabled;
+            /* Обновляем localStream */
+            if (oldAudioTrack) localStream.removeTrack(oldAudioTrack);
+            localStream.addTrack(newAudioTrack);
+
+            /* replaceTrack во всех peerConnections — без renegotiation */
+            for (const [, pc] of Object.entries(peerConnections)) {
+                const sender = pc.getSenders().find(s => s.track?.kind === "audio");
+                if (sender) sender.replaceTrack(newAudioTrack).catch(e => console.warn("[noise] replaceTrack:", e));
+            }
+        }
+
+        showToast(noiseEnabled ? "Шумоподавление включено" : "Шумоподавление выключено", "success", 2500);
+    } catch (e) {
+        /* Если не удалось — откатываем состояние */
+        noiseEnabled = !noiseEnabled;
+        setNoiseIcon();
+        console.warn("[noise] toggleNoise failed:", e);
+        showToast("Не удалось переключить шумоподавление: " + e.message, "error");
+    }
+};
+
+/* ════════════════════════════════════════════
    ДЕМОНСТРАЦИЯ ЭКРАНА
 ════════════════════════════════════════════ */
 function setScreenIcon() {
@@ -2075,6 +2164,7 @@ updateGridLayout();
 setMicIcon();
 setCamIcon();
 setScreenIcon();
+setNoiseIcon();
 /* Сразу обновляем иконки в лейбле — createVideoBox всегда ставит (false,false),
    а пользователь мог включить mic/cam ещё в лобби */
 updateLabelIcons("local", micEnabled, camEnabled);
