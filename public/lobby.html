@@ -32,7 +32,7 @@
     <!-- видео вставляется через JS -->
   </div>
 
-  <!-- Кнопки микрофона и камеры -->
+  <!-- Кнопки микрофона, камеры и шумоподавления -->
   <div class="lobby-controls">
 
     <button class="lobby-ctrl-btn" id="lobbyMicBtn" title="Включить микрофон" aria-label="Включить микрофон" aria-pressed="false">
@@ -43,18 +43,44 @@
       <!-- иконка задаётся через JS -->
     </button>
 
+    <!-- Шумоподавление -->
+    <button class="lobby-ctrl-btn active" id="lobbyNoiseBtn" title="Шумоподавление включено" aria-label="Шумоподавление включено" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/>
+        <path d="M3 12h3"/><path d="M18 12h3"/>
+        <line x1="2" y1="2" x2="22" y2="22" style="display:none" id="noiseBtnCross"/>
+      </svg>
+    </button>
+
   </div>
 
-  <!-- Шкала громкости + слайдер усиления -->
+  <!-- Проверка звука микрофона — визуализация + оценка качества -->
   <div class="mic-meter-section" id="micMeterSection">
 
-    <div class="mic-meter-row">
-      <svg class="mic-meter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-      <div class="mic-meter-bar">
-        <div class="mic-meter-fill" id="micMeterFill"></div>
-      </div>
+    <!-- Waveform canvas -->
+    <div class="mic-waveform-wrap">
+      <canvas id="micWaveform" class="mic-waveform-canvas" width="400" height="56" aria-label="Визуализация звука микрофона"></canvas>
     </div>
 
+    <!-- Оценка качества -->
+    <div class="mic-quality-row" id="micQualityRow">
+      <span class="mic-quality-dot" id="micQualityDot"></span>
+      <span class="mic-quality-text" id="micQualityText">Говорите что-нибудь…</span>
+    </div>
+
+    <!-- Проверка динамика -->
+    <div class="speaker-test-row">
+      <button class="speaker-test-btn" id="speakerTestBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8a6 6 0 0 1 0 8"/><path d="M22 5a10 10 0 0 1 0 14"/>
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        </svg>
+        Проверить динамик
+      </button>
+      <span class="speaker-test-hint" id="speakerTestHint"></span>
+    </div>
+
+    <!-- Слайдер громкости микрофона -->
     <div class="gain-row">
       <span class="gain-label">Громкость микрофона</span>
       <div class="gain-slider-wrap">
@@ -62,12 +88,6 @@
         <input type="range" id="micGainSlider" min="0" max="200" value="100" step="5">
         <span class="gain-value" id="gainValue">100%</span>
       </div>
-    </div>
-
-    <!-- Подсказка про наушники — показывается когда микрофон включён -->
-    <div class="earphone-hint" id="earphoneHint" style="display:none">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-      Вы слышите свой голос — именно так вас слышат другие участники. Рекомендуется использовать наушники, чтобы избежать эха.
     </div>
 
   </div>

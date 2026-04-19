@@ -20,13 +20,17 @@ const previewDiv       = document.getElementById("lobbyPreview");
 const previewOff       = document.getElementById("previewOff");
 const micBtn           = document.getElementById("lobbyMicBtn");
 const camBtn           = document.getElementById("lobbyCamBtn");
+const noiseBtn         = document.getElementById("lobbyNoiseBtn");
 const statusEl         = document.getElementById("lobbyStatus");
 const joinBtn          = document.getElementById("lobbyJoinBtn");
 const micMeterSection  = document.getElementById("micMeterSection");
-const micMeterFill     = document.getElementById("micMeterFill");
 const micGainSlider    = document.getElementById("micGainSlider");
 const gainValueEl      = document.getElementById("gainValue");
-const earphoneHint     = document.getElementById("earphoneHint");
+const micWaveformCanvas= document.getElementById("micWaveform");
+const micQualityDot    = document.getElementById("micQualityDot");
+const micQualityText   = document.getElementById("micQualityText");
+const speakerTestBtn   = document.getElementById("speakerTestBtn");
+const speakerTestHint  = document.getElementById("speakerTestHint");
 
 if (lobbyNameEl) lobbyNameEl.textContent = name;
 
@@ -51,72 +55,158 @@ const SVG = {
 };
 
 /* ── Состояние ── */
-let micEnabled  = false;
-let camEnabled  = false;
-let localStream = null;
-let videoEl     = null;
+let micEnabled   = false;
+let camEnabled   = false;
+let noiseEnabled = true;   /* шумоподавление включено по умолчанию */
+let localStream  = null;
+let videoEl      = null;
 
-/* AudioContext для шкалы и прослушки */
+/* AudioContext для визуализации (НЕ для воспроизведения — эха нет) */
 let audioCtx     = null;
 let analyserNode = null;
 let gainNode     = null;
 let meterAnimId  = null;
 
+/* Скользящее среднее для оценки качества микрофона */
+let _qualityAvg = 0;
+
+/* ── SVG шумоподавления ── */
+const SVG_NOISE_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/><path d="M3 12h3"/><path d="M18 12h3"/></svg>`;
+const SVG_NOISE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/><path d="M3 12h3"/><path d="M18 12h3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>`;
+
 /* ── Обновление иконок кнопок ── */
 function updateMicBtn() {
-    if (!micBtn) return;   /* #22 — null guard */
+    if (!micBtn) return;
     micBtn.innerHTML = micEnabled ? SVG.micOn : SVG.micOff;
     micBtn.className = "lobby-ctrl-btn " + (micEnabled ? "active" : "inactive");
     micBtn.title = micEnabled ? "Выключить микрофон" : "Включить микрофон";
     micBtn.setAttribute("aria-pressed", micEnabled ? "true" : "false");
 }
 function updateCamBtn() {
-    if (!camBtn) return;   /* #23 — null guard */
+    if (!camBtn) return;
     camBtn.innerHTML = camEnabled ? SVG.camOn : SVG.camOff;
     camBtn.className = "lobby-ctrl-btn " + (camEnabled ? "active" : "inactive");
     camBtn.title = camEnabled ? "Выключить камеру" : "Включить камеру";
     camBtn.setAttribute("aria-pressed", camEnabled ? "true" : "false");
 }
+function updateNoiseBtn() {
+    if (!noiseBtn) return;
+    noiseBtn.innerHTML = noiseEnabled ? SVG_NOISE_ON : SVG_NOISE_OFF;
+    noiseBtn.className = "lobby-ctrl-btn " + (noiseEnabled ? "active" : "inactive");
+    noiseBtn.title = noiseEnabled ? "Шумоподавление включено — нажмите, чтобы выключить" : "Шумоподавление выключено — нажмите, чтобы включить";
+    noiseBtn.setAttribute("aria-pressed", noiseEnabled ? "true" : "false");
+}
 
-/* ── Шкала громкости + прослушка своего голоса ── */
+/* ── Визуализация звука (осциллограмма) + оценка качества ── */
+function _setQuality(level) {
+    /* level: "idle" | "quiet" | "good" | "loud" */
+    if (!micQualityDot || !micQualityText) return;
+    const map = {
+        idle:  { color: "rgba(148,163,184,0.5)", text: "Говорите что-нибудь…" },
+        quiet: { color: "#f59e0b",               text: "Вас плохо слышно — говорите громче" },
+        good:  { color: "#22c55e",               text: "Вас слышно хорошо ✓" },
+        loud:  { color: "#ef4444",               text: "Слишком громко — отодвиньтесь от микрофона" },
+    };
+    const q = map[level] || map.idle;
+    micQualityDot.style.background = q.color;
+    micQualityText.textContent = q.text;
+    micQualityText.style.color = q.color;
+}
+
 function startMeter(stream) {
     try {
         if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
         if (audioCtx) { try { audioCtx.close(); } catch (_) {} }
-        audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioCtx.createMediaStreamSource(stream);
         gainNode  = audioCtx.createGain();
         gainNode.gain.value = (parseInt(micGainSlider?.value) || 100) / 100;
         analyserNode = audioCtx.createAnalyser();
-        analyserNode.fftSize = 256;
-        analyserNode.smoothingTimeConstant = 0.55;
+        analyserNode.fftSize = 1024;
+        analyserNode.smoothingTimeConstant = 0.75;
 
+        /* ⚠️ НЕ подключаем к audioCtx.destination — пользователь НЕ слышит себя (нет эха) */
         src.connect(gainNode);
         gainNode.connect(analyserNode);
 
-        /* ───────────────────────────────────────────────────
-           Подключаем к динамикам — пользователь слышит себя.
-           Используется ТОЛЬКО на этой странице.
-           В комнате этого нет (audioCtx закрывается при входе).
-        ─────────────────────────────────────────────────── */
-        gainNode.connect(audioCtx.destination);
+        const timeData = new Uint8Array(analyserNode.fftSize);
+        const freqData = new Uint8Array(analyserNode.frequencyBinCount);
+        const ctx2d    = micWaveformCanvas?.getContext("2d");
+        _qualityAvg    = 0;
+        let _qualityFrames = 0;
 
-        const data = new Uint8Array(analyserNode.frequencyBinCount);
         function tick() {
             meterAnimId = requestAnimationFrame(tick);
-            if (!micMeterFill) return;
-            analyserNode.getByteFrequencyData(data);
+
+            /* ── Осциллограмма ── */
+            if (ctx2d && micWaveformCanvas) {
+                analyserNode.getByteTimeDomainData(timeData);
+                const W = micWaveformCanvas.width;
+                const H = micWaveformCanvas.height;
+                ctx2d.clearRect(0, 0, W, H);
+
+                /* Фон */
+                ctx2d.fillStyle = "rgba(10,12,22,0.0)";
+                ctx2d.fillRect(0, 0, W, H);
+
+                /* Центральная линия (если тишина) */
+                ctx2d.beginPath();
+                ctx2d.strokeStyle = "rgba(99,102,241,0.18)";
+                ctx2d.lineWidth = 1;
+                ctx2d.moveTo(0, H / 2);
+                ctx2d.lineTo(W, H / 2);
+                ctx2d.stroke();
+
+                /* Осциллограмма */
+                ctx2d.beginPath();
+                ctx2d.lineWidth = 2;
+                ctx2d.strokeStyle = "#6366f1";
+                const sliceW = W / timeData.length;
+                let x = 0;
+                for (let i = 0; i < timeData.length; i++) {
+                    const v = timeData[i] / 128.0;
+                    const y = (v * H) / 2;
+                    if (i === 0) ctx2d.moveTo(x, y);
+                    else         ctx2d.lineTo(x, y);
+                    x += sliceW;
+                }
+                ctx2d.stroke();
+
+                /* Тонкое свечение под линией */
+                ctx2d.beginPath();
+                ctx2d.lineWidth = 5;
+                ctx2d.strokeStyle = "rgba(99,102,241,0.12)";
+                x = 0;
+                for (let i = 0; i < timeData.length; i++) {
+                    const v = timeData[i] / 128.0;
+                    const y = (v * H) / 2;
+                    if (i === 0) ctx2d.moveTo(x, y);
+                    else         ctx2d.lineTo(x, y);
+                    x += sliceW;
+                }
+                ctx2d.stroke();
+            }
+
+            /* ── Оценка качества (скользящее среднее RMS) ── */
+            analyserNode.getByteFrequencyData(freqData);
             let sum = 0;
-            for (let i = 0; i < data.length; i++) sum += data[i];
-            const pct = Math.min(100, (sum / data.length / 60) * 100);
-            micMeterFill.style.width = pct + "%";
-            if (pct < 60)      micMeterFill.style.background = "#22c55e";
-            else if (pct < 85) micMeterFill.style.background = "#f59e0b";
-            else               micMeterFill.style.background = "#ef4444";
+            for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+            const level = sum / freqData.length;
+            /* Экспоненциальное сглаживание ~3 сек при 60 fps */
+            _qualityAvg = _qualityAvg * 0.985 + level * 0.015;
+            _qualityFrames++;
+            /* Даём 1 сек «разгона» прежде чем показывать оценку */
+            if (_qualityFrames > 60) {
+                if      (_qualityAvg < 3)  _setQuality("idle");
+                else if (_qualityAvg < 12) _setQuality("quiet");
+                else if (_qualityAvg < 70) _setQuality("good");
+                else                       _setQuality("loud");
+            }
         }
         tick();
-        micMeterSection?.classList.add("visible");   /* #21 — optional chaining */
-        if (earphoneHint) earphoneHint.style.display = "flex";
+        micMeterSection?.classList.add("visible");
+        _setQuality("idle");
     } catch (e) {
         console.warn("AudioContext недоступен:", e);
     }
@@ -124,13 +214,80 @@ function startMeter(stream) {
 
 function stopMeter() {
     if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
-    if (micMeterFill) micMeterFill.style.width = "0%";
-    if (!micEnabled) {
-        micMeterSection?.classList.remove("visible");
-        if (earphoneHint) earphoneHint.style.display = "none";
-    }
-    /* Закрываем AudioContext → прослушка полностью останавливается */
+    /* Очищаем canvas */
+    const ctx2d = micWaveformCanvas?.getContext("2d");
+    if (ctx2d && micWaveformCanvas) ctx2d.clearRect(0, 0, micWaveformCanvas.width, micWaveformCanvas.height);
+    _setQuality("idle");
+    if (!micEnabled) micMeterSection?.classList.remove("visible");
     if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; gainNode = null; analyserNode = null; }
+}
+
+/* ── Проверка динамика: звук колокольчиков ── */
+function playSpeakerTest() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        /* Три тона колокольчика: C5, E5, G5 с экспоненциальным затуханием */
+        const notes = [[523.25, 0.0], [659.25, 0.18], [783.99, 0.36]];
+        notes.forEach(([freq, delay]) => {
+            const osc  = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const now  = ctx.currentTime + delay;
+
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.35, now + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+
+            osc.start(now);
+            osc.stop(now + 1.5);
+
+            /* Лёгкий призвук (обертон) для натуральности колокольчика */
+            const osc2  = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = "sine";
+            osc2.frequency.value = freq * 2.76;
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            gain2.gain.setValueAtTime(0, now);
+            gain2.gain.linearRampToValueAtTime(0.09, now + 0.01);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            osc2.start(now);
+            osc2.stop(now + 0.65);
+        });
+        /* Автозакрываем AudioContext после последнего тона */
+        setTimeout(() => { try { ctx.close(); } catch (_) {} }, 2500);
+    } catch (e) {
+        console.warn("playSpeakerTest failed:", e);
+    }
+}
+
+/* ── Перезапуск микрофона с новыми настройками шума ── */
+async function restartMicWithNoise() {
+    if (!localStream || !micEnabled) return;
+    /* Останавливаем старые аудио-треки */
+    localStream.getAudioTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
+    stopMeter();
+    try {
+        const constraints = {
+            audio: {
+                noiseSuppression: noiseEnabled,
+                echoCancellation: noiseEnabled,
+                autoGainControl:  noiseEnabled,
+            }
+        };
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        newStream.getAudioTracks().forEach(t => {
+            t.enabled = true;
+            localStream.addTrack(t);
+        });
+        startMeter(localStream);
+    } catch (e) {
+        console.warn("restartMicWithNoise failed:", e);
+    }
 }
 
 /* ── Слайдер громкости ── */
@@ -143,18 +300,24 @@ if (micGainSlider) micGainSlider.oninput = () => {
 /* ── Запрос потока ──
    withVideo=false: запрашиваем только микрофон (кнопка "Микрофон").
    withVideo=true:  запрашиваем камеру + микрофон (кнопка "Камера").
-   Не запрашиваем камеру без нужды — убираем лишний диалог разрешений на мобиле. */
+   Настройки шума берутся из текущего состояния noiseEnabled. */
 async function ensureStream(withVideo = true) {
     if (!localStream) {
+        const audioConstraints = {
+            noiseSuppression: noiseEnabled,
+            echoCancellation: noiseEnabled,
+            autoGainControl:  noiseEnabled,
+        };
         try {
             localStream = await navigator.mediaDevices.getUserMedia(
-                withVideo ? { video: true, audio: true } : { video: false, audio: true }
+                withVideo
+                    ? { video: true, audio: audioConstraints }
+                    : { video: false, audio: audioConstraints }
             );
         } catch (e) {
             if (withVideo) {
-                /* Камера недоступна — пробуем только аудио */
                 try {
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
                 } catch (e2) {
                     if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
                     return false;
@@ -191,12 +354,32 @@ function hideVideoPreview() {
 }
 
 function updateStatus() {
-    if (!statusEl) return;   /* null guard: statusEl может отсутствовать */
+    if (!statusEl) return;
     if (micEnabled && camEnabled) statusEl.textContent = "✅ Всё готово! Камера и микрофон работают. Можете входить в конференцию.";
     else if (micEnabled)          statusEl.textContent = "✅ Микрофон включён — вас слышат. Камера выключена.";
     else if (camEnabled)          statusEl.textContent = "✅ Камера включена — вас видят. Микрофон выключен.";
     else                          statusEl.textContent = "Проверьте камеру и микрофон перед входом. Когда будете готовы — нажмите кнопку ниже.";
 }
+
+/* ── Кнопка шумоподавления ── */
+if (noiseBtn) noiseBtn.onclick = async () => {
+    noiseEnabled = !noiseEnabled;
+    updateNoiseBtn();
+    await restartMicWithNoise();
+};
+
+/* ── Кнопка проверки динамика ── */
+if (speakerTestBtn) speakerTestBtn.onclick = () => {
+    playSpeakerTest();
+    if (speakerTestHint) {
+        speakerTestHint.textContent = "🔔 Вы слышите колокольчики?";
+        speakerTestHint.style.color = "#a5b4fc";
+        clearTimeout(speakerTestBtn._hintTimer);
+        speakerTestBtn._hintTimer = setTimeout(() => {
+            if (speakerTestHint) speakerTestHint.textContent = "";
+        }, 3500);
+    }
+};
 
 /* ── Кнопка микрофона ── */
 if (micBtn) micBtn.onclick = async () => {   /* null guard */
@@ -264,4 +447,5 @@ if (joinBtn) joinBtn.onclick = () => {   /* null guard */
 /* ── Инициализация ── */
 updateMicBtn();
 updateCamBtn();
+updateNoiseBtn();
 updateStatus();

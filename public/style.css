@@ -402,7 +402,7 @@ body.lobby-page {
 .mic-meter-section {
     display: none;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     background: rgba(255,255,255,0.03);
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -410,31 +410,77 @@ body.lobby-page {
 }
 .mic-meter-section.visible { display: flex; }
 
-.mic-meter-row {
+/* ── Waveform canvas ── */
+.mic-waveform-wrap {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(99,102,241,0.06);
+    border: 1px solid rgba(99,102,241,0.15);
+}
+.mic-waveform-canvas {
+    display: block;
+    width: 100%;
+    height: 56px;
+}
+
+/* ── Quality label ── */
+.mic-quality-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
-.mic-meter-icon {
-    width: 16px;
-    height: 16px;
+.mic-quality-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     flex-shrink: 0;
+    background: rgba(148,163,184,0.4);
+    transition: background 0.4s;
+}
+.mic-quality-text {
+    font-size: 12px;
+    font-weight: 500;
+    transition: color 0.4s;
     color: var(--text3);
 }
 
-.mic-meter-bar {
-    flex: 1;
-    height: 8px;
-    background: rgba(255,255,255,0.07);
-    border-radius: 6px;
-    overflow: hidden;
+/* ── Speaker test row ── */
+.speaker-test-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
-.mic-meter-fill {
-    height: 100%;
-    width: 0%;
-    border-radius: 6px;
-    background: var(--green);
-    transition: width 0.06s linear, background 0.15s;
+.speaker-test-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 20px;
+    color: #a5b4fc;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.12s;
+    white-space: nowrap;
+}
+.speaker-test-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+.speaker-test-btn:hover {
+    background: rgba(99,102,241,0.22);
+    transform: scale(1.03);
+}
+.speaker-test-btn:active { transform: scale(0.97); }
+.speaker-test-hint {
+    font-size: 12px;
+    color: #a5b4fc;
+    font-weight: 500;
 }
 
 /* ── Gain slider row ── */
@@ -469,25 +515,7 @@ body.lobby-page {
     font-variant-numeric: tabular-nums;
 }
 
-/* ── Подсказка «используйте наушники» ── */
-.earphone-hint {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #f59e0b;
-    background: rgba(245,158,11,0.08);
-    border: 1px solid rgba(245,158,11,0.2);
-    border-radius: 8px;
-    padding: 8px 10px;
-    line-height: 1.4;
-}
-.earphone-hint svg {
-    width: 15px;
-    height: 15px;
-    flex-shrink: 0;
-    color: #f59e0b;
-}
+/* .earphone-hint удалён — самопрослушивание убрано */
 
 /* ═══════════════════════════════════════
    TOPBAR
