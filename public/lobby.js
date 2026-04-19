@@ -113,58 +113,93 @@ function _setQuality(level) {
     micQualityText.style.color = q.color;
 }
 
-/* Нода самопрослушивания (для сравнения шумоподавления) */
-let selfMonitorGain = null;
+/* ── Самопрослушивание: запись 5 секунд → воспроизведение ── */
 let selfMonitorTimer = null;
+let _smRecording = false;
 const selfMonitorBtn  = document.getElementById("selfMonitorBtn");
 const selfMonitorHint = document.getElementById("selfMonitorHint");
 
-function _updateSelfMonitorBtn(active, countdown) {
-    if (!selfMonitorBtn) return;
-    if (active) {
-        selfMonitorBtn.classList.add("active");
-        selfMonitorBtn.title = "Отключить самопрослушивание";
-        if (selfMonitorHint) {
-            selfMonitorHint.textContent = countdown > 0
-                ? `Слышите себя — ${countdown} сек`
-                : "Слышите себя";
-        }
-    } else {
-        selfMonitorBtn.classList.remove("active");
-        selfMonitorBtn.title = "Послушать себя, чтобы сравнить шумоподавление";
-        if (selfMonitorHint) selfMonitorHint.textContent = "";
-    }
-}
-
-function enableSelfMonitor(seconds = 6) {
-    if (!gainNode || !audioCtx) return;
-    disableSelfMonitor();
-    selfMonitorGain = audioCtx.createGain();
-    selfMonitorGain.gain.value = 0.85;
-    gainNode.connect(selfMonitorGain);
-    selfMonitorGain.connect(audioCtx.destination);
-
-    let left = seconds;
-    _updateSelfMonitorBtn(true, left);
-    const tick = setInterval(() => {
-        left--;
-        if (left <= 0) {
-            clearInterval(tick);
-            disableSelfMonitor();
-        } else {
-            _updateSelfMonitorBtn(true, left);
-        }
-    }, 1000);
-    selfMonitorTimer = tick;
-}
-
+/* Заглушка для обратной совместимости (stopMeter вызывает disableSelfMonitor) */
 function disableSelfMonitor() {
     if (selfMonitorTimer) { clearInterval(selfMonitorTimer); selfMonitorTimer = null; }
-    if (selfMonitorGain) {
-        try { selfMonitorGain.disconnect(); } catch (_) {}
-        selfMonitorGain = null;
+    _smRecording = false;
+    if (selfMonitorBtn) selfMonitorBtn.classList.remove("active");
+    if (selfMonitorHint) selfMonitorHint.textContent = "";
+}
+
+async function startSelfMonitorRecording(seconds = 5) {
+    if (_smRecording) return;           /* защита от двойного нажатия */
+    if (!localStream) {
+        if (selfMonitorHint) selfMonitorHint.textContent = "Сначала включите микрофон";
+        setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+        return;
     }
-    _updateSelfMonitorBtn(false, 0);
+    const audioTracks = localStream.getAudioTracks();
+    if (!audioTracks.length || !audioTracks[0].enabled) {
+        if (selfMonitorHint) selfMonitorHint.textContent = "Сначала включите микрофон";
+        setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+        return;
+    }
+
+    /* Пробуем подходящий MIME-тип */
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg", ""]
+        .find(m => m === "" || MediaRecorder.isTypeSupported(m)) || "";
+
+    let recorder;
+    try {
+        const recStream = new MediaStream(audioTracks);
+        recorder = new MediaRecorder(recStream, mimeType ? { mimeType } : {});
+    } catch (e) {
+        console.warn("[selfMonitor] MediaRecorder init failed:", e);
+        if (selfMonitorHint) selfMonitorHint.textContent = "Запись недоступна в этом браузере";
+        return;
+    }
+
+    _smRecording = true;
+    if (selfMonitorBtn) selfMonitorBtn.classList.add("active");
+
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+
+    recorder.onstop = () => {
+        _smRecording = false;
+        if (selfMonitorBtn) selfMonitorBtn.classList.remove("active");
+        if (selfMonitorHint) selfMonitorHint.textContent = "▶ Воспроизводим…";
+
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const url  = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => {
+            URL.revokeObjectURL(url);
+            if (selfMonitorHint) selfMonitorHint.textContent = "";
+        };
+        audio.onerror = () => {
+            URL.revokeObjectURL(url);
+            if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
+            setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+        };
+        audio.play().catch(err => {
+            console.warn("[selfMonitor] play failed:", err);
+            if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
+            setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+        });
+    };
+
+    recorder.start();
+
+    /* Обратный отсчёт */
+    let left = seconds;
+    if (selfMonitorHint) selfMonitorHint.textContent = `🎤 Говорите — ${left} с`;
+    selfMonitorTimer = setInterval(() => {
+        left--;
+        if (left <= 0) {
+            clearInterval(selfMonitorTimer); selfMonitorTimer = null;
+            if (selfMonitorHint) selfMonitorHint.textContent = "⏳ Обработка…";
+            try { recorder.stop(); } catch (_) {}
+        } else {
+            if (selfMonitorHint) selfMonitorHint.textContent = `🎤 Говорите — ${left} с`;
+        }
+    }, 1000);
 }
 
 function startMeter(stream) {
@@ -181,7 +216,7 @@ function startMeter(stream) {
         analyserNode.smoothingTimeConstant = 0.75;
 
         /* ⚠️ По умолчанию НЕ подключаем к destination — пользователь не слышит себя.
-           Только если включено самопрослушивание — enableSelfMonitor() добавляет ноду. */
+           Кнопка «Послушать себя» использует MediaRecorder (запись → воспроизведение). */
         src.connect(gainNode);
         gainNode.connect(analyserNode);
 
@@ -276,13 +311,10 @@ function stopMeter() {
     if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; gainNode = null; analyserNode = null; }
 }
 
-/* ── Кнопка самопрослушивания (сравнение с шумоподавлением и без) ── */
+/* ── Кнопка самопрослушивания: запись 5 секунд → воспроизведение ── */
 if (selfMonitorBtn) selfMonitorBtn.onclick = () => {
-    if (selfMonitorGain) {
-        disableSelfMonitor();
-    } else {
-        enableSelfMonitor(6);
-    }
+    if (_smRecording) return;   /* игнорируем повторное нажатие во время записи */
+    startSelfMonitorRecording(5);
 };
 
 /* ── Проверка динамика: звук колокольчиков ── */

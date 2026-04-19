@@ -605,62 +605,104 @@ function removeVideoBox(id) {
     updateGridLayout();
 }
 
-/* ── Баннер «Ждём участников» — показывается пока вы один в комнате ── */
+/* ── Баннер «Ждём участников» ── */
 function updateWaitingBanner() {
     if (!videoGrid) return;
     const count = videoGrid.querySelectorAll(".video-box").length;
     let banner = document.getElementById("vc-waiting-banner");
+
+    /* Если пользователь уже закрыл баннер вручную — не показываем снова */
+    if (window._waitingBannerDismissed) return;
+
     if (count <= 1) {
         if (!banner) {
-            banner = document.createElement("div");
-            banner.id = "vc-waiting-banner";
-            banner.innerHTML = `
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;opacity:0.6">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-                <div>
-                    <div style="font-weight:600;margin-bottom:4px">Вы пока одни</div>
-                    <div style="opacity:0.7;font-size:13px">Поделитесь ссылкой, чтобы пригласить участников</div>
-                </div>
-                <button id="vc-waiting-copy" title="Скопировать ссылку" style="
-                    margin-left:auto;padding:8px 16px;background:rgba(99,102,241,0.2);
-                    border:1px solid rgba(99,102,241,0.5);border-radius:8px;cursor:pointer;
-                    color:#a5b4fc;font-size:13px;white-space:nowrap;flex-shrink:0;
-                    transition:background 0.15s;
-                ">Скопировать ссылку</button>
-            `;
-            banner.style.cssText = `
-                position:absolute;bottom:0;left:0;right:0;
-                display:flex;align-items:center;gap:14px;
-                padding:14px 20px;
-                background:rgba(10,12,22,0.85);
-                border-top:1px solid rgba(255,255,255,0.07);
-                backdrop-filter:blur(8px);
-                color:var(--text2,#94a3b8);
-                font-size:14px;z-index:10;
-                animation:fadeInUp 0.3s ease;
-            `;
-            /* Добавляем анимацию fadeInUp если нет */
+            /* ── Один раз внедряем CSS-анимацию ── */
             if (!document.getElementById("vc-waiting-anim")) {
                 const s = document.createElement("style");
                 s.id = "vc-waiting-anim";
-                s.textContent = "@keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}";
+                s.textContent = `
+                    @keyframes vcBannerIn {
+                        from { opacity:0; transform:translate(-50%,-50%) scale(0.92); }
+                        to   { opacity:1; transform:translate(-50%,-50%) scale(1); }
+                    }
+                `;
                 document.head.appendChild(s);
             }
+
+            banner = document.createElement("div");
+            banner.id = "vc-waiting-banner";
+            banner.innerHTML = `
+                <button class="vc-wb-close" id="vc-waiting-close" aria-label="Закрыть">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                         stroke-linecap="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+                <div class="vc-wb-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <p class="vc-wb-title">Вы пока одни</p>
+                <p class="vc-wb-sub">Поделитесь ссылкой — участники смогут войти по ней</p>
+                <button class="vc-wb-copy" id="vc-waiting-copy">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/>
+                        <circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                        <line x1="15.41" y1="6.51"  x2="8.59"  y2="10.49"/>
+                    </svg>
+                    Скопировать ссылку
+                </button>
+            `;
+
+            /* Стили — центрированная карточка поверх сетки */
+            Object.assign(banner.style, {
+                position:   "absolute",
+                top:        "50%",
+                left:       "50%",
+                transform:  "translate(-50%,-50%)",
+                zIndex:     "20",
+                animation:  "vcBannerIn 0.25s ease both",
+            });
+
             videoGrid.style.position = "relative";
             videoGrid.appendChild(banner);
+
+            /* Закрыть */
+            document.getElementById("vc-waiting-close").onclick = () => {
+                window._waitingBannerDismissed = true;
+                banner.style.animation = "vcBannerIn 0.2s ease reverse both";
+                setTimeout(() => banner.remove(), 200);
+            };
+
+            /* Скопировать */
             const copyWaiting = document.getElementById("vc-waiting-copy");
-            if (copyWaiting) {
-                copyWaiting.onmouseenter = () => copyWaiting.style.background = "rgba(99,102,241,0.35)";
-                copyWaiting.onmouseleave = () => copyWaiting.style.background = "rgba(99,102,241,0.2)";
-                copyWaiting.onclick = () => {
-                    const link = `${location.origin}/?room=${encodeURIComponent(room)}`;
-                    navigator.clipboard?.writeText(link)
-                        .then(() => showToast("Ссылка скопирована!", "success", 2500))
-                        .catch(() => showToast("Не удалось скопировать", "error", 3000));
-                };
-            }
+            copyWaiting.onclick = () => {
+                const link = `${location.origin}/?room=${encodeURIComponent(room)}`;
+                navigator.clipboard?.writeText(link)
+                    .then(() => {
+                        copyWaiting.textContent = "✓ Скопировано!";
+                        showToast("Ссылка скопирована!", "success", 2500);
+                        setTimeout(() => {
+                            copyWaiting.innerHTML = `
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/>
+                                    <circle cx="18" cy="19" r="3"/>
+                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                                    <line x1="15.41" y1="6.51"  x2="8.59"  y2="10.49"/>
+                                </svg>
+                                Скопировать ссылку`;
+                        }, 2000);
+                    })
+                    .catch(() => showToast("Не удалось скопировать", "error", 3000));
+            };
         }
     } else if (banner) {
         banner.remove();

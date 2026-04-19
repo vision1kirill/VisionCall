@@ -1457,3 +1457,103 @@ button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn {
     border-color: var(--green);
     color: var(--green);
 }
+
+/* ═══════════════════════════════════════
+   БАННЕР «ВЫ ПОКА ОДНИ» (waiting banner)
+═══════════════════════════════════════ */
+#vc-waiting-banner {
+    background: rgba(15, 17, 35, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 20px;
+    padding: 32px 28px 24px;
+    min-width: 280px;
+    max-width: 340px;
+    width: calc(100% - 48px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1);
+    text-align: center;
+}
+
+.vc-wb-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+    flex-shrink: 0;
+}
+.vc-wb-close svg { width: 14px; height: 14px; }
+.vc-wb-close:hover {
+    background: rgba(255,255,255,0.14);
+    color: var(--text);
+}
+
+.vc-wb-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+.vc-wb-icon svg {
+    width: 26px;
+    height: 26px;
+    color: var(--accent);
+}
+
+.vc-wb-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin: 0;
+}
+
+.vc-wb-sub {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.5;
+    margin: 0 0 6px;
+}
+
+.vc-wb-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 2px 12px rgba(99,102,241,0.4);
+}
+.vc-wb-copy svg { width: 15px; height: 15px; }
+.vc-wb-copy:hover {
+    background: #7577f3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 18px rgba(99,102,241,0.55);
+}
+.vc-wb-copy:active { transform: translateY(0); }
