@@ -113,6 +113,60 @@ function _setQuality(level) {
     micQualityText.style.color = q.color;
 }
 
+/* Нода самопрослушивания (для сравнения шумоподавления) */
+let selfMonitorGain = null;
+let selfMonitorTimer = null;
+const selfMonitorBtn  = document.getElementById("selfMonitorBtn");
+const selfMonitorHint = document.getElementById("selfMonitorHint");
+
+function _updateSelfMonitorBtn(active, countdown) {
+    if (!selfMonitorBtn) return;
+    if (active) {
+        selfMonitorBtn.classList.add("active");
+        selfMonitorBtn.title = "Отключить самопрослушивание";
+        if (selfMonitorHint) {
+            selfMonitorHint.textContent = countdown > 0
+                ? `Слышите себя — ${countdown} сек`
+                : "Слышите себя";
+        }
+    } else {
+        selfMonitorBtn.classList.remove("active");
+        selfMonitorBtn.title = "Послушать себя, чтобы сравнить шумоподавление";
+        if (selfMonitorHint) selfMonitorHint.textContent = "";
+    }
+}
+
+function enableSelfMonitor(seconds = 6) {
+    if (!gainNode || !audioCtx) return;
+    disableSelfMonitor();
+    selfMonitorGain = audioCtx.createGain();
+    selfMonitorGain.gain.value = 0.85;
+    gainNode.connect(selfMonitorGain);
+    selfMonitorGain.connect(audioCtx.destination);
+
+    let left = seconds;
+    _updateSelfMonitorBtn(true, left);
+    const tick = setInterval(() => {
+        left--;
+        if (left <= 0) {
+            clearInterval(tick);
+            disableSelfMonitor();
+        } else {
+            _updateSelfMonitorBtn(true, left);
+        }
+    }, 1000);
+    selfMonitorTimer = tick;
+}
+
+function disableSelfMonitor() {
+    if (selfMonitorTimer) { clearInterval(selfMonitorTimer); selfMonitorTimer = null; }
+    if (selfMonitorGain) {
+        try { selfMonitorGain.disconnect(); } catch (_) {}
+        selfMonitorGain = null;
+    }
+    _updateSelfMonitorBtn(false, 0);
+}
+
 function startMeter(stream) {
     try {
         if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
@@ -126,7 +180,8 @@ function startMeter(stream) {
         analyserNode.fftSize = 1024;
         analyserNode.smoothingTimeConstant = 0.75;
 
-        /* ⚠️ НЕ подключаем к audioCtx.destination — пользователь НЕ слышит себя (нет эха) */
+        /* ⚠️ По умолчанию НЕ подключаем к destination — пользователь не слышит себя.
+           Только если включено самопрослушивание — enableSelfMonitor() добавляет ноду. */
         src.connect(gainNode);
         gainNode.connect(analyserNode);
 
@@ -141,62 +196,61 @@ function startMeter(stream) {
 
             /* ── Осциллограмма ── */
             if (ctx2d && micWaveformCanvas) {
+                /* Синхронизируем размер canvas с реальными CSS-пикселями каждый кадр.
+                   Без этого canvas.width != clientWidth → рисунок не совпадает с контейнером. */
+                const dpr = window.devicePixelRatio || 1;
+                const cW  = micWaveformCanvas.clientWidth  || 300;
+                const cH  = micWaveformCanvas.clientHeight || 56;
+                if (micWaveformCanvas.width  !== Math.round(cW * dpr) ||
+                    micWaveformCanvas.height !== Math.round(cH * dpr)) {
+                    micWaveformCanvas.width  = Math.round(cW * dpr);
+                    micWaveformCanvas.height = Math.round(cH * dpr);
+                    ctx2d.scale(dpr, dpr);
+                }
+                const W = cW;
+                const H = cH;
+                const pad = 5; /* отступ сверху/снизу — волна не вылезает за рамку */
+
                 analyserNode.getByteTimeDomainData(timeData);
-                const W = micWaveformCanvas.width;
-                const H = micWaveformCanvas.height;
-                ctx2d.clearRect(0, 0, W, H);
+                ctx2d.clearRect(0, 0, W * dpr, H * dpr);
 
-                /* Фон */
-                ctx2d.fillStyle = "rgba(10,12,22,0.0)";
-                ctx2d.fillRect(0, 0, W, H);
-
-                /* Центральная линия (если тишина) */
+                /* Центральная линия-ориентир */
                 ctx2d.beginPath();
-                ctx2d.strokeStyle = "rgba(99,102,241,0.18)";
+                ctx2d.strokeStyle = "rgba(99,102,241,0.20)";
                 ctx2d.lineWidth = 1;
                 ctx2d.moveTo(0, H / 2);
                 ctx2d.lineTo(W, H / 2);
                 ctx2d.stroke();
 
-                /* Осциллограмма */
-                ctx2d.beginPath();
-                ctx2d.lineWidth = 2;
-                ctx2d.strokeStyle = "#6366f1";
-                const sliceW = W / timeData.length;
-                let x = 0;
-                for (let i = 0; i < timeData.length; i++) {
-                    const v = timeData[i] / 128.0;
-                    const y = (v * H) / 2;
-                    if (i === 0) ctx2d.moveTo(x, y);
-                    else         ctx2d.lineTo(x, y);
-                    x += sliceW;
-                }
-                ctx2d.stroke();
-
-                /* Тонкое свечение под линией */
-                ctx2d.beginPath();
-                ctx2d.lineWidth = 5;
-                ctx2d.strokeStyle = "rgba(99,102,241,0.12)";
-                x = 0;
-                for (let i = 0; i < timeData.length; i++) {
-                    const v = timeData[i] / 128.0;
-                    const y = (v * H) / 2;
-                    if (i === 0) ctx2d.moveTo(x, y);
-                    else         ctx2d.lineTo(x, y);
-                    x += sliceW;
-                }
-                ctx2d.stroke();
+                /* Осциллограмма.
+                   ПРАВИЛЬНАЯ формула: timeData[i]=128 → молчание → y=H/2.
+                   v ∈ [-1, +1], y = center ± amplitude (с padding). */
+                const drawWave = (lw, alpha) => {
+                    ctx2d.beginPath();
+                    ctx2d.lineWidth = lw;
+                    ctx2d.strokeStyle = `rgba(99,102,241,${alpha})`;
+                    ctx2d.lineJoin = "round";
+                    const sliceW = W / (timeData.length - 1);
+                    for (let i = 0; i < timeData.length; i++) {
+                        const v = (timeData[i] - 128) / 128;          /* -1…+1 */
+                        const y = H / 2 + v * (H / 2 - pad);          /* pad от краёв */
+                        const x = i * sliceW;
+                        if (i === 0) ctx2d.moveTo(x, y);
+                        else         ctx2d.lineTo(x, y);
+                    }
+                    ctx2d.stroke();
+                };
+                drawWave(5, 0.10);  /* свечение */
+                drawWave(2, 0.90);  /* основная линия */
             }
 
-            /* ── Оценка качества (скользящее среднее RMS) ── */
+            /* ── Оценка качества (скользящее среднее) ── */
             analyserNode.getByteFrequencyData(freqData);
             let sum = 0;
             for (let i = 0; i < freqData.length; i++) sum += freqData[i];
-            const level = sum / freqData.length;
-            /* Экспоненциальное сглаживание ~3 сек при 60 fps */
-            _qualityAvg = _qualityAvg * 0.985 + level * 0.015;
+            const lvl = sum / freqData.length;
+            _qualityAvg = _qualityAvg * 0.985 + lvl * 0.015;
             _qualityFrames++;
-            /* Даём 1 сек «разгона» прежде чем показывать оценку */
             if (_qualityFrames > 60) {
                 if      (_qualityAvg < 3)  _setQuality("idle");
                 else if (_qualityAvg < 12) _setQuality("quiet");
@@ -214,13 +268,22 @@ function startMeter(stream) {
 
 function stopMeter() {
     if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
-    /* Очищаем canvas */
+    disableSelfMonitor();
     const ctx2d = micWaveformCanvas?.getContext("2d");
     if (ctx2d && micWaveformCanvas) ctx2d.clearRect(0, 0, micWaveformCanvas.width, micWaveformCanvas.height);
     _setQuality("idle");
     if (!micEnabled) micMeterSection?.classList.remove("visible");
     if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; gainNode = null; analyserNode = null; }
 }
+
+/* ── Кнопка самопрослушивания (сравнение с шумоподавлением и без) ── */
+if (selfMonitorBtn) selfMonitorBtn.onclick = () => {
+    if (selfMonitorGain) {
+        disableSelfMonitor();
+    } else {
+        enableSelfMonitor(6);
+    }
+};
 
 /* ── Проверка динамика: звук колокольчиков ── */
 function playSpeakerTest() {
@@ -433,13 +496,12 @@ if (camBtn) camBtn.onclick = async () => {   /* null guard */
 
 /* ── Войти в комнату ── */
 if (joinBtn) joinBtn.onclick = () => {   /* null guard */
-    /* Защита от двойного нажатия */
     if (joinBtn.disabled) return;
     joinBtn.disabled = true;
 
+    disableSelfMonitor();
     if (localStream) localStream.getTracks().forEach(t => t.stop());
-    /* Закрываем AudioContext — прослушка остановлена, в комнате её нет */
-    if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; }  /* #29 — safe close */
+    if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; }
     const gain = micGainSlider?.value ?? 100;  /* #28 — null-safe value */
     window.location.href = `/room.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name.slice(0, 64))}&avatar=${encodeURIComponent(avatar)}&mic=${micEnabled ? 1 : 0}&cam=${camEnabled ? 1 : 0}&micGain=${gain}`;
 };
