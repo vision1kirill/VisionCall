@@ -531,6 +531,12 @@ if (joinBtn) joinBtn.onclick = () => {   /* null guard */
     if (joinBtn.disabled) return;
     joinBtn.disabled = true;
 
+    /* Bug fix: если запись ещё идёт — прерываем, не ждём конца отсчёта */
+    if (selfMonitorTimer) { clearInterval(selfMonitorTimer); selfMonitorTimer = null; }
+    _smRecording = false;
+    if (selfMonitorBtn) selfMonitorBtn.classList.remove("active");
+    if (selfMonitorHint) selfMonitorHint.textContent = "";
+
     disableSelfMonitor();
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; }

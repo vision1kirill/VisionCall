@@ -28,6 +28,8 @@ function sendMessage() {
     if (!text) return;
     /* #34 — Не отправляем если сокет не подключён */
     if (!socket.connected) {
+        /* Bug fix: показываем видимую ошибку — тихий fail непонятен пользователю */
+        if (typeof showToast === "function") showToast("Нет соединения — сообщение не отправлено", "error", 3000);
         console.warn("chat.js: сокет не подключён, сообщение не отправлено");
         return;
     }

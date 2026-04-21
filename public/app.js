@@ -6,7 +6,10 @@ const initMic  = params.get("mic") === "1";
 const initCam  = params.get("cam") === "1";
 /* #40 — NaN guard: parseInt("abc") = NaN → NaN/100 = NaN → Math.max/min пропускают NaN.
    Добавляем || 100 чтобы получить безопасное значение по умолчанию. */
-const initGain  = Math.max(0, Math.min(2, (parseInt(params.get("micGain") || "100") || 100) / 100));
+/* Bug fix: parseInt("0") || 100 = 100 (0 is falsy) — нельзя поставить gain 0% из лобби.
+   Используем NaN-проверку вместо falsy-check. */
+const _gainRaw  = parseInt(params.get("micGain") ?? "100");
+const initGain  = Math.max(0, Math.min(2, (Number.isNaN(_gainRaw) ? 100 : _gainRaw) / 100));
 const initNoise = params.get("noise") !== "0"; /* по умолчанию шумоподавление включено */
 
 /* #39 — Без комнаты → на главную (name проверяется ниже) */
@@ -282,6 +285,7 @@ function playSfxLeave() {
 /* ── AudioContext ── */
 let audioCtx    = null;
 let micGainNode = null;
+let _micSrcNode = null; /* источник AudioContext для микрофона (нужен для disconnect при замене) */
 
 function getAudioCtx() {
     if (!audioCtx || audioCtx.state === "closed") {
@@ -315,13 +319,19 @@ function buildGainedStream(rawStream, gain) {
         const src  = ctx.createMediaStreamSource(rawStream);
         const gn   = ctx.createGain();
         gn.gain.value = gain;
+        _micSrcNode   = src;   /* сохраняем для disconnect при замене треков */
         micGainNode   = gn;
         const dest    = ctx.createMediaStreamDestination();
         src.connect(gn);
         gn.connect(dest);
         /* #51 — Проверяем что dest.stream содержит трек перед созданием выходного потока */
         const destTracks = dest.stream.getAudioTracks();
-        if (destTracks.length === 0) { micGainNode = null; return rawStream; }
+        if (destTracks.length === 0) {
+            /* Bug fix: отключаем ноды перед возвратом — иначе src→gn живёт как утечка памяти */
+            try { src.disconnect(); gn.disconnect(); } catch (_) {}
+            _micSrcNode = null; micGainNode = null;
+            return rawStream;
+        }
         const out = new MediaStream();
         rawStream.getVideoTracks().forEach(t => out.addTrack(t));
         destTracks.forEach(t => out.addTrack(t));
@@ -499,6 +509,9 @@ function showVideoInBox(id, stream, muted, isScreen) {
         video.classList.add("flip-h");
     }
     box.insertBefore(video, document.getElementById("label-" + id));
+    /* Bug fix: явный .play() — autoplay policy некоторых браузеров
+       не гарантирует воспроизведение без явного вызова после монтирования */
+    video.play().catch(() => {});
 
     /* ── Страховочная сетка от "замороженного" видео ──────────────────
        Если media-state задержался или потерялся, a видео-трек собеседника
@@ -565,6 +578,7 @@ function ensureRemoteAudio(id, stream) {
     audio.autoplay  = true;
     audio.srcObject = stream;
     document.body.appendChild(audio);
+    audio.play().catch(() => {}); /* Bug fix: явный play() для autoplay policy */
     peerAudioEls[id] = audio;
 }
 
@@ -1002,6 +1016,7 @@ function showRemoteScreenAudio(id, stream) {
     audio.autoplay  = true;
     audio.srcObject = stream;
     document.body.appendChild(audio);
+    audio.play().catch(() => {}); /* Bug fix: явный play() для autoplay policy */
 
     const box = document.getElementById("box-" + id);
     if (box) {
@@ -1321,7 +1336,7 @@ socket.on("connect", () => {
             if (reconnectTimers[id]) { clearTimeout(reconnectTimers[id]); delete reconnectTimers[id]; }
             if (peerAudioEls[id])    { peerAudioEls[id].srcObject = null; peerAudioEls[id].remove(); delete peerAudioEls[id]; }
             removeRemoteScreenAudio(id);
-            box.querySelector(".rsa-viewer-panel")?.remove();
+            box.querySelector(".remote-screen-audio-panel")?.remove(); /* Bug fix: был неверный класс .rsa-viewer-panel */
             box.remove();
         });
         /* Убираем чужих участников из сайдбара */
@@ -1337,6 +1352,9 @@ socket.on("connect", () => {
         Object.keys(peerVideoStreams).forEach(id => delete peerVideoStreams[id]);
         screenSharingPeers.clear();
         roomCreatorId = null;
+        /* Bug fix: сбрасываем флаг закрытия баннера при переподключении —
+           пользователь снова один и баннер должен показаться заново */
+        window._waitingBannerDismissed = false;
         updateGridLayout();
 
         /* Возобновляем AudioContext — браузер мог заморозить его во время разрыва */
@@ -1651,7 +1669,7 @@ socket.on("screen-share-state", data => {
     } else {
         screenSharingPeers.delete(data.from);
         /* Убираем слайдер громкости и любые устаревшие элементы screen audio */
-        box.querySelector(".rsa-viewer-panel")?.remove();
+        box.querySelector(".remote-screen-audio-panel")?.remove(); /* Bug fix: был неверный класс .rsa-viewer-panel */
         removeRemoteScreenAudio(data.from);
         /* Восстанавливаем отображение: камера включена → убираем screen-video класс,
            камера выключена → скрываем video и показываем аватар */
@@ -1827,13 +1845,17 @@ function setNoiseIcon() {
         : "Шумоподавление выключено — нажмите, чтобы включить";
 }
 
+let _noiseToggling = false; /* Bug fix: блокируем двойное нажатие (гонка двух getUserMedia) */
+
 if (noiseBtn) noiseBtn.onclick = async () => {
+    if (_noiseToggling) return; /* Bug fix: race condition — игнорируем пока предыдущий запрос не завершён */
     noiseEnabled = !noiseEnabled;
     setNoiseIcon();
 
     /* Если микрофон ещё не активирован — просто запоминаем настройку */
     if (!localStream || !micEnabled) return;
 
+    _noiseToggling = true;
     const audioConstraints = {
         noiseSuppression: noiseEnabled,
         echoCancellation: noiseEnabled,
@@ -1855,7 +1877,9 @@ if (noiseBtn) noiseBtn.onclick = async () => {
         const oldAudioTrack = localStream.getAudioTracks()[0];
 
         if (initGain !== 1 && audioCtx && audioCtx.state !== "closed") {
-            /* Перестраиваем WebAudio-граф с новым источником */
+            /* Bug fix: отключаем ОБА старых узла (src→gn) перед перестройкой графа,
+               иначе они остаются живыми (утечка памяти) */
+            if (_micSrcNode) { try { _micSrcNode.disconnect(); } catch (_) {} _micSrcNode = null; }
             if (micGainNode) { try { micGainNode.disconnect(); } catch (_) {} micGainNode = null; }
             const newGained = buildGainedStream(newRaw, initGain);
             newAudioTrack = newGained.getAudioTracks()[0];
@@ -1874,6 +1898,10 @@ if (noiseBtn) noiseBtn.onclick = async () => {
                 const sender = pc.getSenders().find(s => s.track?.kind === "audio");
                 if (sender) sender.replaceTrack(newAudioTrack).catch(e => console.warn("[noise] replaceTrack:", e));
             }
+
+            /* Bug fix: перезапускаем speaking-монитор — старый AudioContext source
+               был привязан к предыдущему треку и теперь устарел */
+            if (micEnabled) monitorSpeaking("local", localStream);
         }
 
         showToast(noiseEnabled ? "Шумоподавление включено" : "Шумоподавление выключено", "success", 2500);
@@ -1883,6 +1911,8 @@ if (noiseBtn) noiseBtn.onclick = async () => {
         setNoiseIcon();
         console.warn("[noise] toggleNoise failed:", e);
         showToast("Не удалось переключить шумоподавление: " + e.message, "error");
+    } finally {
+        _noiseToggling = false;
     }
 };
 
@@ -2119,6 +2149,16 @@ if (leaveBtn) leaveBtn.onclick = () => {  /* #53 — null guard */
     }
     Object.values(peerConnections).forEach(pc => pc.close());
     localStream?.getTracks().forEach(t => t.stop());
+    /* Bug fix: если gain != 1, localStream — производный поток; rawStream тоже надо остановить */
+    if (_rawMicStream && _rawMicStream !== localStream) {
+        _rawMicStream.getAudioTracks().forEach(t => t.stop());
+    }
+    /* Bug fix: останавливаем placeholder-треки чтобы не держать активными после выхода */
+    try { if (_blackTrack) { _blackTrack.stop(); _blackTrack = null; } } catch (_) {}
+    try { if (_silentTrack) { _silentTrack.stop(); _silentTrack = null; } } catch (_) {}
+    try { if (_silentCtx && _silentCtx.state !== "closed") _silentCtx.close(); } catch (_) {}
+    try { if (_micSrcNode) { _micSrcNode.disconnect(); _micSrcNode = null; } } catch (_) {}
+    try { if (micGainNode) { micGainNode.disconnect(); micGainNode = null; } } catch (_) {}
     screenStream?.getTracks().forEach(t => t.stop());
     socket.disconnect();
     window.location.href = "/";
