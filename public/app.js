@@ -1147,6 +1147,49 @@ async function switchCamera() {
     }
 }
 
+/* ── Safety-net: если аудио-трек умер после переключения камеры — перезапустить ──
+   Несмотря на разделённые getUserMedia (startCamera), некоторые старые браузеры
+   или iOS < 15 могут прекратить аудио-захват при изменении video-сессии.
+   Эта функция проверяет readyState трека и перезапускает при необходимости. ── */
+async function _ensureAudioAlive() {
+    if (!localStream || !micEnabled) return;
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack && audioTrack.readyState !== "ended") return; /* трек жив — всё OK */
+
+    console.warn("[audio] Аудио-трек умер после переключения камеры — перезапускаем");
+    const audioConstraints = {
+        noiseSuppression: noiseEnabled,
+        echoCancellation: noiseEnabled,
+        autoGainControl:  noiseEnabled,
+    };
+    try {
+        const newRaw = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        const newTrack = newRaw.getAudioTracks()[0];
+        if (!newTrack) return;
+
+        /* Заменяем мёртвый трек в localStream */
+        if (audioTrack) { audioTrack.stop(); localStream.removeTrack(audioTrack); }
+        localStream.addTrack(newTrack);
+        newTrack.enabled = micEnabled;
+        _rawMicStream = newRaw;
+
+        /* Синхронизируем все peer connections с новым треком */
+        for (const [, pc] of Object.entries(peerConnections)) {
+            if (pc.connectionState === "closed") continue;
+            const sender = pc.getSenders().find(s => s.track?.kind === "audio");
+            if (sender) sender.replaceTrack(newTrack).catch(e => console.warn("[audio-recover] replaceTrack:", e));
+        }
+
+        /* Перезапускаем speaking-монитор */
+        if (micEnabled) monitorSpeaking("local", localStream);
+
+        showToast("Микрофон переподключён", "success", 2500);
+    } catch (e) {
+        console.warn("[audio] _ensureAudioAlive failed:", e);
+        showToast("Не удалось восстановить микрофон — обновите страницу", "error", 5000);
+    }
+}
+
 /* ── Синхронизировать аудио-сендеры после создания/смены localStream ──
    Вызывается когда localStream впервые создаётся в mid-session
    (пользователь нажал камеру / микрофон когда поток ещё не существовал).
@@ -1980,10 +2023,12 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
                 if (s) s.replaceTrack(blackTrack).catch(() => {});
             }
         }
-        /* Bug fix: после остановки видеотрека восстанавливаем аудио-сендеры.
-           На некоторых браузерах остановка видео из того же getUserMedia
-           может затронуть аудио-сессию. */
+        /* Синхронизируем аудио-сендеры */
         syncPeerAudioSenders();
+        /* Safety-net: через 150 мс проверяем что аудио-трек жив.
+           На некоторых браузерах/iOS остановка video может убить аудио
+           даже при разных getUserMedia-сессиях. Восстанавливаем автоматически. */
+        setTimeout(() => _ensureAudioAlive(), 150);
     } else {
         /* ── Включаем камеру: запрашиваем новый трек через getUserMedia ── */
         try {
@@ -2012,8 +2057,10 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
             camEnabled = false;
             showToast("Не удалось включить камеру: " + e.message, "error");
         }
-        /* Bug fix: синхронизируем аудио после любого изменения состояния камеры */
+        /* Синхронизируем аудио после включения камеры */
         syncPeerAudioSenders();
+        /* Safety-net: проверяем аудио-трек после включения камеры */
+        setTimeout(() => _ensureAudioAlive(), 150);
     }
 
     setCamIcon();

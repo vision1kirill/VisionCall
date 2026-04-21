@@ -413,20 +413,29 @@ body.lobby-page {
 /* ── Waveform canvas ── */
 .mic-waveform-wrap {
     width: 100%;
+    max-width: 100%;
     border-radius: 10px;
     overflow: hidden;           /* обрезает всё что вылезает за рамку */
     background: rgba(99,102,241,0.05);
     border: 1px solid rgba(99,102,241,0.14);
     /* Фиксируем высоту контейнера — canvas подстраивается через JS */
     height: 60px;
+    min-height: 60px;
     position: relative;
+    /* iOS Safari: clip не работает на position:absolute детях внутри
+       backdrop-filter контейнеров — используем contain чтобы гарантировать обрезку */
+    contain: paint;
+    -webkit-transform: translateZ(0); /* создаём отдельный compositing layer */
+    transform: translateZ(0);
 }
 .mic-waveform-canvas {
+    /* Убираем position:absolute — iOS Safari иногда не обрезает абсолютно
+       позиционированные элементы внутри backdrop-filter контейнеров.
+       display:block + width/height 100% работает надёжнее. */
     display: block;
-    position: absolute;
-    inset: 0;
     width: 100%;
     height: 100%;
+    max-width: 100%;
 }
 
 /* ── Quality label ── */
@@ -1923,6 +1932,10 @@ button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn {
     flex-direction: column !important;
     gap: 8px !important;
     padding: 10px !important;
+    /* В spotlight-режиме отключаем скролл — flex layout сам распределяет высоту.
+       overflow-y:auto (из базового правила .video-grid) создаёт скроллбар
+       и может обрезать thumbnail-row. overflow:hidden решает это. */
+    overflow: hidden !important;
     /* Reset inline grid styles */
     grid-template-columns: unset !important;
     grid-auto-rows: unset !important;

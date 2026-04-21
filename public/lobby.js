@@ -127,7 +127,10 @@ function disableSelfMonitor() {
     if (selfMonitorHint) selfMonitorHint.textContent = "";
 }
 
-async function startSelfMonitorRecording(seconds = 5) {
+/* playbackCtx — AudioContext, созданный В МОМЕНТ КЛИКА (user gesture).
+   На iOS audio.play() в async-колбэке через 5+ сек заблокирован autoplay policy.
+   Web Audio AudioContext, созданный в gesture, может воспроизводить и после. */
+async function startSelfMonitorRecording(seconds = 5, playbackCtx = null) {
     if (_smRecording) return;           /* защита от двойного нажатия */
     if (!localStream) {
         if (selfMonitorHint) selfMonitorHint.textContent = "Сначала включите микрофон";
@@ -152,6 +155,7 @@ async function startSelfMonitorRecording(seconds = 5) {
     } catch (e) {
         console.warn("[selfMonitor] MediaRecorder init failed:", e);
         if (selfMonitorHint) selfMonitorHint.textContent = "Запись недоступна в этом браузере";
+        if (playbackCtx) { try { playbackCtx.close(); } catch (_) {} }
         return;
     }
 
@@ -161,28 +165,59 @@ async function startSelfMonitorRecording(seconds = 5) {
     const chunks = [];
     recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
 
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
         _smRecording = false;
         if (selfMonitorBtn) selfMonitorBtn.classList.remove("active");
         if (selfMonitorHint) selfMonitorHint.textContent = "▶ Воспроизводим…";
 
         const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        const url  = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.onended = () => {
-            URL.revokeObjectURL(url);
-            if (selfMonitorHint) selfMonitorHint.textContent = "";
-        };
-        audio.onerror = () => {
-            URL.revokeObjectURL(url);
-            if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
-            setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
-        };
-        audio.play().catch(err => {
-            console.warn("[selfMonitor] play failed:", err);
-            if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
-            setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
-        });
+
+        /* ── Воспроизведение через Web Audio (работает на iOS Safari) ──────────
+           HTMLAudioElement.play() в async-колбэке через 5+ секунд блокируется iOS.
+           Web Audio AudioContext, созданный в gesture, воспроизводит без ограничений.
+           Если playbackCtx не передан — fallback на HTMLAudio (для десктопа). ── */
+        if (playbackCtx) {
+            try {
+                const arrayBuf = await blob.arrayBuffer();
+                /* AudioContext может "уснуть" на iOS — будим его */
+                if (playbackCtx.state === "suspended") {
+                    await playbackCtx.resume().catch(() => {});
+                }
+                const audioBuf = await playbackCtx.decodeAudioData(arrayBuf);
+                const src = playbackCtx.createBufferSource();
+                src.buffer = audioBuf;
+                src.connect(playbackCtx.destination);
+                src.start();
+                src.onended = () => {
+                    try { playbackCtx.close(); } catch (_) {}
+                    if (selfMonitorHint) selfMonitorHint.textContent = "";
+                };
+            } catch (err) {
+                console.warn("[selfMonitor] WebAudio playback failed:", err);
+                try { playbackCtx.close(); } catch (_) {}
+                if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
+                setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+            }
+        } else {
+            /* Десктоп: стандартный HTMLAudioElement */
+            const url   = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.onended = () => {
+                URL.revokeObjectURL(url);
+                if (selfMonitorHint) selfMonitorHint.textContent = "";
+            };
+            audio.onerror = () => {
+                URL.revokeObjectURL(url);
+                if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
+                setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+            };
+            audio.play().catch(err => {
+                console.warn("[selfMonitor] play failed:", err);
+                URL.revokeObjectURL(url);
+                if (selfMonitorHint) selfMonitorHint.textContent = "Не удалось воспроизвести";
+                setTimeout(() => { if (selfMonitorHint) selfMonitorHint.textContent = ""; }, 2500);
+            });
+        }
     };
 
     recorder.start();
@@ -232,22 +267,29 @@ function startMeter(stream) {
             /* ── Осциллограмма ── */
             if (ctx2d && micWaveformCanvas) {
                 /* Синхронизируем размер canvas с реальными CSS-пикселями каждый кадр.
-                   Без этого canvas.width != clientWidth → рисунок не совпадает с контейнером. */
-                const dpr = window.devicePixelRatio || 1;
-                const cW  = micWaveformCanvas.clientWidth  || 300;
-                const cH  = micWaveformCanvas.clientHeight || 56;
-                if (micWaveformCanvas.width  !== Math.round(cW * dpr) ||
-                    micWaveformCanvas.height !== Math.round(cH * dpr)) {
-                    micWaveformCanvas.width  = Math.round(cW * dpr);
-                    micWaveformCanvas.height = Math.round(cH * dpr);
-                    ctx2d.scale(dpr, dpr);
+                   getBoundingClientRect() точнее clientWidth на iOS (учитывает дробные пиксели).
+                   Fallback 280 (а не 300) — canvas НЕ position:absolute, поэтому даже если
+                   layout ещё не случился, 280 безопаснее чем 300 (меньше вероятность overflow). */
+                const dpr  = window.devicePixelRatio || 1;
+                const rect = micWaveformCanvas.getBoundingClientRect();
+                const cW   = Math.round(rect.width  || micWaveformCanvas.offsetWidth  || 280);
+                const cH   = Math.round(rect.height || micWaveformCanvas.offsetHeight || 56);
+                const physW = Math.round(cW * dpr);
+                const physH = Math.round(cH * dpr);
+                if (micWaveformCanvas.width !== physW || micWaveformCanvas.height !== physH) {
+                    micWaveformCanvas.width  = physW;
+                    micWaveformCanvas.height = physH;
+                    /* setTransform(a,b,c,d,e,f) — абсолютная установка матрицы.
+                       В отличие от scale(), не накапливается при повторных ресайзах. */
+                    ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
                 }
                 const W = cW;
                 const H = cH;
                 const pad = 5; /* отступ сверху/снизу — волна не вылезает за рамку */
 
                 analyserNode.getByteTimeDomainData(timeData);
-                ctx2d.clearRect(0, 0, W * dpr, H * dpr);
+                /* clearRect в CSS-координатах (после setTransform DPR) */
+                ctx2d.clearRect(0, 0, W, H);
 
                 /* Центральная линия-ориентир */
                 ctx2d.beginPath();
@@ -314,7 +356,19 @@ function stopMeter() {
 /* ── Кнопка самопрослушивания: запись 5 секунд → воспроизведение ── */
 if (selfMonitorBtn) selfMonitorBtn.onclick = () => {
     if (_smRecording) return;   /* игнорируем повторное нажатие во время записи */
-    startSelfMonitorRecording(5);
+
+    /* iOS Safari: AudioContext создаётся ЗДЕСЬ, в user gesture (клик).
+       Через 5 сек в recorder.onstop gesture уже нет — audio.play() заблокирован.
+       Передаём ctx в функцию, он остаётся "живым" для воспроизведения. */
+    let playbackCtx = null;
+    try {
+        playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+        /* Немедленно resume() пока мы в gesture — старые iOS могут стартовать
+           в suspended state */
+        playbackCtx.resume().catch(() => {});
+    } catch (_) { playbackCtx = null; }
+
+    startSelfMonitorRecording(5, playbackCtx);
 };
 
 /* ── Проверка динамика: звук колокольчиков ── */
