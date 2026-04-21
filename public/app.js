@@ -1827,6 +1827,8 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
         if (camEnabled) showVideoInBox("local", localStream, true, false);
         else            showAvatarInBox("local", avatar);
     }
+    /* Notify fx-effects.js that camera track changed */
+    document.dispatchEvent(new CustomEvent("vc:camera-changed"));
 };
 
 if (flipBtn) { flipBtn.onclick = () => switchCamera(); }

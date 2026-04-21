@@ -1,33 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f0f23"/>
-      <stop offset="100%" stop-color="#1e1b4b"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#141528"/>
+      <stop offset="100%" stop-color="#08091a"/>
     </linearGradient>
-    <linearGradient id="iris" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#a78bfa"/>
+    <linearGradient id="main" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
     </linearGradient>
-    <radialGradient id="shine" cx="35%" cy="35%">
-      <stop offset="0%" stop-color="white" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="white" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="glow" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </linearGradient>
   </defs>
+
   <!-- Background rounded square -->
   <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <!-- Eye whites area -->
-  <path d="M10,32 Q32,12 54,32 Q32,52 10,32 Z" fill="#1e1b4b"/>
-  <!-- Eye outline glow -->
-  <path d="M8,32 Q32,8 56,32 Q32,56 8,32 Z" fill="none" stroke="#6366f1" stroke-width="2.5"/>
-  <!-- Iris -->
-  <circle cx="32" cy="32" r="11" fill="url(#iris)"/>
-  <!-- Shine overlay on iris -->
-  <circle cx="32" cy="32" r="11" fill="url(#shine)"/>
-  <!-- Pupil -->
-  <circle cx="32" cy="32" r="6" fill="#0a0a1a"/>
-  <!-- V shape in pupil (white) -->
-  <polyline points="27,29 32,35 37,29" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Top/bottom sparkle dots -->
-  <circle cx="32" cy="17" r="1.3" fill="#818cf8" opacity="0.65"/>
-  <circle cx="32" cy="47" r="1.3" fill="#818cf8" opacity="0.65"/>
+
+  <!-- Subtle top glow -->
+  <ellipse cx="32" cy="8" rx="22" ry="14" fill="url(#glow)"/>
+
+  <!-- Subtle border -->
+  <rect width="64" height="64" rx="14" fill="none" stroke="rgba(165,180,252,0.14)" stroke-width="1"/>
+
+  <!-- Camera body -->
+  <rect x="7" y="19" width="33" height="23" rx="5" fill="url(#main)"/>
+
+  <!-- Camera viewfinder polygon -->
+  <polygon points="42,24 57,17 57,47 42,40" fill="url(#main)" opacity="0.88"/>
+
+  <!-- Lens dark housing -->
+  <circle cx="23.5" cy="30.5" r="9" fill="#08091a" opacity="0.72"/>
+
+  <!-- Lens colored inner -->
+  <circle cx="23.5" cy="30.5" r="5.8" fill="url(#main)" opacity="0.92"/>
+
+  <!-- Lens pupil -->
+  <circle cx="23.5" cy="30.5" r="3.1" fill="#08091a"/>
+
+  <!-- Lens highlight -->
+  <circle cx="21.2" cy="28.2" r="1.3" fill="white" opacity="0.3"/>
+
+  <!-- Recording dot -->
+  <circle cx="12" cy="23.5" r="2.8" fill="#f87171"/>
+  <circle cx="12" cy="23.5" r="1.6" fill="#fca5a5" opacity="0.6"/>
 </svg>

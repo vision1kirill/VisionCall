@@ -26,6 +26,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 <!-- JSON-LD Structured Data — улучшает отображение в поисковиках -->
 <script type="application/ld+json">
 {
@@ -222,6 +223,13 @@ function pollOnline() {
         })
         .catch(() => {});
 }
+/* ── Service Worker ── */
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+    });
+}
+
 /* Only poll on the home card page */
 if (!preRoom) {
     pollOnline();

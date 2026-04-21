@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
 <link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
 <body class="lobby-page">
 
@@ -119,5 +120,10 @@
 
 <script src="avatars.js"></script>
 <script src="lobby.js"></script>
+<script>
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+}
+</script>
 </body>
 </html>
