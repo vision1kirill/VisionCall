@@ -100,10 +100,12 @@
 <script src="avatars.js"></script>
 <script src="app.js"></script>
 <script src="chat.js"></script>
-<script src="fx-effects.js"></script>
 <script>
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+    navigator.serviceWorker.addEventListener("message", e => {
+        if (e.data?.type === "SW_UPDATED") location.reload();
+    });
 }
 </script>
 

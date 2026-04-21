@@ -1057,7 +1057,13 @@ async function startCamera(facing, audioOnly = false) {
             /* Нужно видео + аудио */
             try {
                 rawStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: mode }, audio: audioConstraints
+                    video: {
+                        facingMode: mode,
+                        width:     { ideal: 1280 },
+                        height:    { ideal: 720  },
+                        frameRate: { ideal: 30, min: 15 }
+                    },
+                    audio: audioConstraints
                 });
             } catch (_) {
                 try {
@@ -1106,7 +1112,13 @@ async function switchCamera() {
     facingMode = (facingMode === "user") ? "environment" : "user";
     try {
         const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode }, audio: false
+            video: {
+                facingMode,
+                width:     { ideal: 1280 },
+                height:    { ideal: 720  },
+                frameRate: { ideal: 30, min: 15 }
+            },
+            audio: false
         });
         const newTrack = newStream.getVideoTracks()[0];
         newTrack.enabled = true;
@@ -1132,15 +1144,16 @@ async function switchCamera() {
 function syncPeerAudioSenders() {
     if (!localStream) return;
     const realAudioTrack = localStream.getAudioTracks()[0];
-    if (!realAudioTrack) return;
-    /* Если mic включён — заменяем любой silent-трек на реальный */
+    /* Всегда вычисляем нужный трек на основе текущего состояния mic */
+    const targetTrack = (micEnabled && realAudioTrack) ? realAudioTrack : getSilentAudioTrack();
+    if (!targetTrack) return;
     for (const [, pc] of Object.entries(peerConnections)) {
         if (pc.connectionState === "closed") continue;
         const sender = pc.getSenders().find(s => s.track?.kind === "audio");
         if (!sender) continue;
-        if (sender.track !== realAudioTrack) {
-            const targetTrack = micEnabled ? realAudioTrack : getSilentAudioTrack();
-            if (targetTrack) sender.replaceTrack(targetTrack).catch(() => {});
+        /* Заменяем только если трек отличается — избегаем лишних replaceTrack */
+        if (sender.track !== targetTrack) {
+            sender.replaceTrack(targetTrack).catch(e => console.warn("[audio-sync] replaceTrack:", e));
         }
     }
 }
@@ -1956,10 +1969,22 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
                 if (s) s.replaceTrack(blackTrack).catch(() => {});
             }
         }
+        /* Bug fix: после остановки видеотрека восстанавливаем аудио-сендеры.
+           На некоторых браузерах остановка видео из того же getUserMedia
+           может затронуть аудио-сессию. */
+        syncPeerAudioSenders();
     } else {
         /* ── Включаем камеру: запрашиваем новый трек через getUserMedia ── */
         try {
-            const ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+            const ns = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode,
+                    width:     { ideal: 1280 },
+                    height:    { ideal: 720  },
+                    frameRate: { ideal: 30, min: 15 }
+                },
+                audio: false
+            });
             const newTrack = ns.getVideoTracks()[0];
             if (newTrack) {
                 newTrack.enabled = true;
@@ -1976,6 +2001,8 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
             camEnabled = false;
             showToast("Не удалось включить камеру: " + e.message, "error");
         }
+        /* Bug fix: синхронизируем аудио после любого изменения состояния камеры */
+        syncPeerAudioSenders();
     }
 
     setCamIcon();

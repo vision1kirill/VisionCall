@@ -1,17 +1,15 @@
 /* ═══════════════════════════════════════════════
-   VisionCall Service Worker — PWA offline support
+   VisionCall Service Worker — v3
    Cache strategy:
-   - Static assets → cache-first
-   - API & socket.io → network-only
-   - HTML pages → network-first (always fresh)
+   - Images / icons / manifest → cache-first (rarely change)
+   - JS / CSS / HTML → network-first, NEVER served stale
+   - API & socket.io → network-only (never intercepted)
 ═══════════════════════════════════════════════ */
 
-const CACHE_NAME = "visioncall-v1";
+const CACHE_NAME = "visioncall-v3";
 
+/* Only pre-cache truly static binary assets */
 const PRECACHE_URLS = [
-  "/",
-  "/index.html",
-  "/style.css",
   "/favicon.svg",
   "/icon-192.png",
   "/icon-512.png",
@@ -19,24 +17,29 @@ const PRECACHE_URLS = [
   "/manifest.json"
 ];
 
-/* ── Install: pre-cache static shell ── */
+/* ── Install: pre-cache icons/manifest, skip waiting immediately ── */
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
   );
+  /* Take over immediately — don't wait for old tabs to close */
   self.skipWaiting();
 });
 
-/* ── Activate: purge old caches ── */
+/* ── Activate: purge ALL old caches, take control of all clients ── */
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      )
-    )
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => {
+        /* Tell every open tab to reload so they pick up the new code */
+        return self.clients.matchAll({ includeUncontrolled: true, type: "window" });
+      })
+      .then(clients => {
+        clients.forEach(client => client.postMessage({ type: "SW_UPDATED" }));
+      })
   );
-  self.clients.claim();
 });
 
 /* ── Fetch ── */
@@ -50,10 +53,29 @@ self.addEventListener("fetch", event => {
     url.pathname.startsWith("/api/") ||
     url.origin !== self.location.origin
   ) {
-    return; /* fall through to network */
+    return; /* fall through to native network */
   }
 
-  /* HTML pages → network-first so content stays fresh */
+  const ext = url.pathname.split(".").pop().toLowerCase();
+
+  /* JS and CSS — ALWAYS fetch fresh, fall back to cache only on offline */
+  if (ext === "js" || ext === "css") {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          /* Update cache with the fresh response */
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request)) /* offline fallback */
+    );
+    return;
+  }
+
+  /* HTML pages — network-first so content is always fresh */
   if (request.headers.get("accept")?.includes("text/html")) {
     event.respondWith(
       fetch(request)
@@ -67,7 +89,7 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  /* JS / CSS / images → cache-first */
+  /* Images / icons / manifest — cache-first (these never change) */
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
