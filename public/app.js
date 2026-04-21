@@ -1051,56 +1051,67 @@ async function startCamera(facing, audioOnly = false) {
         echoCancellation: noiseEnabled,
         autoGainControl:  noiseEnabled,
     };
-    let rawStream;
     try {
+        /* ══════════════════════════════════════════════════════════════════
+           ВАЖНО: аудио и видео запрашиваются РАЗДЕЛЬНЫМИ getUserMedia-вызовами.
+           Это предотвращает классический баг Safari/iOS/Chrome: остановка
+           видео-трека из совмещённого потока убивает всю аудио-сессию.
+           При раздельных вызовах у каждого трека своя независимая сессия.
+        ══════════════════════════════════════════════════════════════════ */
+
+        /* ── Шаг 1: всегда получаем аудио отдельным вызовом ── */
+        let rawAudioStream;
+        try {
+            rawAudioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        } catch (e) {
+            showToast("Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
+            return;
+        }
+
+        /* ── Шаг 2: видео — только если нужно, отдельным вызовом ── */
+        let rawVideoStream = null;
         if (camEnabled && !audioOnly) {
-            /* Нужно видео + аудио */
             try {
-                rawStream = await navigator.mediaDevices.getUserMedia({
+                rawVideoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: mode,
                         width:     { ideal: 1280 },
                         height:    { ideal: 720  },
                         frameRate: { ideal: 30, min: 15 }
-                    },
-                    audio: audioConstraints
+                    }
                 });
             } catch (_) {
                 try {
-                    rawStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
+                    rawVideoStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 } catch (_2) {
-                    /* Камера недоступна — пробуем только аудио */
-                    try {
-                        rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-                        camEnabled = false;
-                        setCamIcon();
-                        showToast("Камера недоступна — подключено только аудио.", "info", 5000);
-                    } catch (e) {
-                        showToast("Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
-                        return;
-                    }
+                    /* Камера недоступна — работаем только с аудио */
+                    camEnabled = false;
+                    setCamIcon();
+                    showToast("Камера недоступна — подключено только аудио.", "info", 5000);
                 }
             }
-        } else {
-            /* Камера выключена ИЛИ нужен только звук — запрашиваем ТОЛЬКО аудио */
-            try {
-                rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-            } catch (e) {
-                showToast("Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке и разрешите доступ, затем обновите страницу.", "error", 8000);
-                return;
-            }
         }
-        /* Сохраняем сырой поток для последующего перезапуска с новыми настройками шума */
-        _rawMicStream = rawStream;
-        localStream = (initGain !== 1) ? buildGainedStream(rawStream, initGain) : rawStream;
-        localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-        if (!camEnabled) {
-            /* Камера выключена — останавливаем видео-треки (если вдруг есть),
-               чтобы не горел аппаратный индикатор камеры. */
-            localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
-        } else {
-            localStream.getVideoTracks().forEach(t => t.enabled = true);
-        }
+
+        /* ── Шаг 3: сохраняем сырой аудио-поток (для перезапуска при смене шумоподавления) ── */
+        _rawMicStream = rawAudioStream;
+
+        /* ── Шаг 4: применяем gain-граф только к аудио-потоку ── */
+        const processedAudioStream = (initGain !== 1)
+            ? buildGainedStream(rawAudioStream, initGain)
+            : rawAudioStream;
+
+        /* ── Шаг 5: собираем localStream из независимых треков ──
+           Аудио и видео физически из разных getUserMedia-сессий.
+           Остановка видео-трека НИКОГДА не затронет аудио. ── */
+        localStream = new MediaStream([
+            ...processedAudioStream.getAudioTracks(),
+            ...(rawVideoStream ? rawVideoStream.getVideoTracks() : [])
+        ]);
+
+        /* ── Шаг 6: применяем текущее состояние mic/cam ── */
+        localStream.getAudioTracks().forEach(t => { t.enabled = micEnabled; });
+        localStream.getVideoTracks().forEach(t => { t.enabled = true; });
+
     } finally {
         cameraStarting = false;
     }

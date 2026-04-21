@@ -403,25 +403,27 @@ async function ensureStream(withVideo = true) {
             echoCancellation: noiseEnabled,
             autoGainControl:  noiseEnabled,
         };
+        /* Аудио и видео всегда запрашиваем РАЗДЕЛЬНО — остановка видео-трека
+           не должна затрагивать аудио-сессию (баг Safari/iOS/Chrome). */
+        let audioStream, videoStream;
         try {
-            localStream = await navigator.mediaDevices.getUserMedia(
-                withVideo
-                    ? { video: true, audio: audioConstraints }
-                    : { video: false, audio: audioConstraints }
-            );
+            audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
         } catch (e) {
-            if (withVideo) {
-                try {
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-                } catch (e2) {
-                    if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к камере и микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
-                    return false;
-                }
-            } else {
-                if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
-                return false;
+            if (statusEl) statusEl.textContent = "⚠️ Браузер заблокировал доступ к микрофону. Нажмите на значок 🔒 в адресной строке браузера, разрешите доступ и перезагрузите страницу.";
+            return false;
+        }
+        if (withVideo) {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            } catch (_) {
+                /* Камера недоступна — продолжаем только с аудио */
+                videoStream = null;
             }
         }
+        localStream = new MediaStream([
+            ...audioStream.getAudioTracks(),
+            ...(videoStream ? videoStream.getVideoTracks() : [])
+        ]);
         localStream.getTracks().forEach(t => t.enabled = false);
     }
     return true;
