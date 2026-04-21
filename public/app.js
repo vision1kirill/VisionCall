@@ -56,6 +56,9 @@ const ICONS = {
     copied:    `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
     noiseOn:   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/><path d="M3 12h3"/><path d="M18 12h3"/></svg>`,
     noiseOff:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9v6"/><path d="M12 5v14"/><path d="M15 9v6"/><path d="M3 12h3"/><path d="M18 12h3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>`,
+    pin:       `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>`,
+    unpin:     `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><line x1="12" y1="17" x2="12" y2="22"/><path d="M9.58 9.58A2 2 0 0 0 9 10.76V6H8a2 2 0 0 1 0-4h1"/><path d="M16 6h-1v4.76a2 2 0 0 0 1.11 1.79l1.78.9A2 2 0 0 1 19 15.24V17H8"/></svg>`,
+    pip:       `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1"/></svg>`,
     labelMicOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>`,
     labelMicOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
     labelCamOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
@@ -163,6 +166,9 @@ const reconnectTimers = {};
 let _joined = false;
 /* ── Флаг активного переподключения (для тоста «восстановлено») ── */
 let _reconnecting = false;
+
+/* ── Закреплённый участник (spotlight-режим) ── */
+let pinnedId = null;
 
 /* ── Отслеживаем кто из удалённых участников сейчас шарит экран ── */
 const screenSharingPeers = new Set();
@@ -481,8 +487,43 @@ function createVideoBox(id, username, userAvatar) {
         box.appendChild(qi);
     }
 
-    videoGrid.appendChild(box);
-    updateGridLayout();
+    /* ── Кнопки действий (pin + PiP, появляются при наведении) ── */
+    const boxActions = document.createElement("div");
+    boxActions.className = "vc-box-actions";
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "vc-action-btn vc-pin-btn";
+    pinBtn.setAttribute("aria-label", "Закрепить участника");
+    pinBtn.title = "Закрепить / открепить";
+    pinBtn.innerHTML = ICONS.pin;
+    pinBtn.onclick = e => { e.stopPropagation(); togglePin(id); };
+    boxActions.appendChild(pinBtn);
+
+    if (document.pictureInPictureEnabled !== false) {
+        const pipBtn = document.createElement("button");
+        pipBtn.className = "vc-action-btn vc-pip-btn";
+        pipBtn.setAttribute("aria-label", "Картинка в картинке");
+        pipBtn.title = "Картинка в картинке";
+        pipBtn.innerHTML = ICONS.pip;
+        pipBtn.onclick = e => { e.stopPropagation(); togglePiP(box); };
+        boxActions.appendChild(pipBtn);
+    }
+
+    box.appendChild(boxActions);
+
+    /* Если активен spotlight-режим, новый участник → в полосу миниатюр */
+    const thumbRow = document.getElementById("vc-thumb-row");
+    if (pinnedId && thumbRow) {
+        thumbRow.appendChild(box);
+    } else {
+        videoGrid.appendChild(box);
+    }
+
+    /* Анимация входа — добавляем ПОСЛЕ монтирования в DOM */
+    box.classList.add("vc-box-entering");
+    box.addEventListener("animationend", () => box.classList.remove("vc-box-entering"), { once: true });
+
+    if (!pinnedId) updateGridLayout();
 }
 
 function showVideoInBox(id, stream, muted, isScreen) {
@@ -600,13 +641,21 @@ function removeVideoBox(id) {
     }
     /* Убираем screen audio */
     removeRemoteScreenAudio(id);
+    /* Если закреплённый участник вышел — снимаем spotlight */
+    if (id === pinnedId) clearSpotlight();
+
     /* Явно останавливаем видео в боксе */
     const box = document.getElementById("box-" + id);
     if (box) {
         const vid = box.querySelector("video");
         if (vid) { vid.pause(); vid.srcObject = null; }
+        /* Анимация выхода — удаляем из DOM после завершения */
+        box.classList.add("vc-box-leaving");
+        setTimeout(() => {
+            box.remove();
+            if (!pinnedId) updateGridLayout();
+        }, 220);
     }
-    box?.remove();
     removeParticipant(id);
     /* Удаляем из Map ДО закрытия PC — иначе onconnectionstatechange("closed") может
        вызвать removeVideoBox повторно (проверка peerConnections[id] === pc будет false). */
@@ -624,7 +673,7 @@ function removeVideoBox(id) {
         pc.onnegotiationneeded = null;
         try { pc.close(); } catch (e) {}
     }
-    updateGridLayout();
+    if (!box) updateGridLayout();
 }
 
 /* ── Баннер «Ждём участников» ── */
@@ -734,8 +783,9 @@ function updateWaitingBanner() {
 /* ── Динамическая сетка ── */
 function updateGridLayout() {
     if (!videoGrid) return;   /* #77 — null guard */
-    const count = videoGrid.querySelectorAll(".video-box").length;
     updateWaitingBanner();
+    if (pinnedId) return;     /* Spotlight-режим управляет лейаутом самостоятельно */
+    const count = videoGrid.querySelectorAll(".video-box").length;
     if (count <= 1) {
         videoGrid.style.gridTemplateColumns = "1fr";
         videoGrid.style.gridAutoRows = "minmax(200px, 1fr)";
@@ -806,6 +856,88 @@ function monitorSpeaking(id, stream) {
         }
         rafId = requestAnimationFrame(check);
     } catch (e) { /* AudioContext недоступен */ }
+}
+
+/* ════════════════════════════════════════════
+   SPOTLIGHT / PIN
+════════════════════════════════════════════ */
+function togglePin(id) {
+    if (pinnedId === id) clearSpotlight();
+    else setSpotlight(id);
+}
+
+function setSpotlight(id) {
+    if (pinnedId) clearSpotlight();
+    const box = document.getElementById("box-" + id);
+    if (!box) return;
+
+    pinnedId = id;
+    videoGrid.classList.add("spotlight-mode");
+    box.classList.add("vc-spotlight-main");
+
+    /* Создаём полосу миниатюр и переносим в неё все остальные боксы */
+    const thumbRow = document.createElement("div");
+    thumbRow.className = "vc-thumbnail-row";
+    thumbRow.id = "vc-thumb-row";
+    videoGrid.appendChild(thumbRow);
+
+    Array.from(videoGrid.querySelectorAll(".video-box:not(.vc-spotlight-main)")).forEach(b => {
+        thumbRow.appendChild(b);
+    });
+
+    _updatePinButtons();
+}
+
+function clearSpotlight() {
+    if (!pinnedId) return;
+    const thumbRow = document.getElementById("vc-thumb-row");
+
+    /* Возвращаем боксы из полосы миниатюр обратно в сетку */
+    if (thumbRow) {
+        Array.from(thumbRow.querySelectorAll(".video-box")).forEach(b => {
+            b.classList.remove("vc-spotlight-main");
+            videoGrid.insertBefore(b, thumbRow);
+        });
+        thumbRow.remove();
+    }
+
+    const pinnedBox = document.getElementById("box-" + pinnedId);
+    if (pinnedBox) pinnedBox.classList.remove("vc-spotlight-main");
+
+    pinnedId = null;
+    videoGrid.classList.remove("spotlight-mode");
+    _updatePinButtons();
+    updateGridLayout();
+}
+
+function _updatePinButtons() {
+    document.querySelectorAll(".vc-pin-btn").forEach(btn => {
+        const boxId = btn.closest(".video-box")?.id?.replace("box-", "");
+        const isPinned = boxId === pinnedId;
+        btn.classList.toggle("is-pinned", isPinned);
+        btn.innerHTML = isPinned ? ICONS.unpin : ICONS.pin;
+        btn.setAttribute("aria-label", isPinned ? "Открепить участника" : "Закрепить участника");
+    });
+}
+
+/* ════════════════════════════════════════════
+   КАРТИНКА В КАРТИНКЕ
+════════════════════════════════════════════ */
+async function togglePiP(box) {
+    const video = box.querySelector("video");
+    if (!video) {
+        showToast("Нет видео для режима «картинка в картинке»", "info", 2500);
+        return;
+    }
+    try {
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+        } else {
+            await video.requestPictureInPicture();
+        }
+    } catch (e) {
+        showToast("Картинка в картинке недоступна", "info", 2500);
+    }
 }
 
 /* ════════════════════════════════════════════
@@ -989,6 +1121,27 @@ async function switchCamera() {
     } catch (e) {
         showToast("Не удалось переключить камеру: " + e.message, "error");
         facingMode = (facingMode === "user") ? "environment" : "user";
+    }
+}
+
+/* ── Синхронизировать аудио-сендеры после создания/смены localStream ──
+   Вызывается когда localStream впервые создаётся в mid-session
+   (пользователь нажал камеру / микрофон когда поток ещё не существовал).
+   Без этого вызова существующие peer connections остаются с тихим треком
+   даже если mic включён. ── */
+function syncPeerAudioSenders() {
+    if (!localStream) return;
+    const realAudioTrack = localStream.getAudioTracks()[0];
+    if (!realAudioTrack) return;
+    /* Если mic включён — заменяем любой silent-трек на реальный */
+    for (const [, pc] of Object.entries(peerConnections)) {
+        if (pc.connectionState === "closed") continue;
+        const sender = pc.getSenders().find(s => s.track?.kind === "audio");
+        if (!sender) continue;
+        if (sender.track !== realAudioTrack) {
+            const targetTrack = micEnabled ? realAudioTrack : getSilentAudioTrack();
+            if (targetTrack) sender.replaceTrack(targetTrack).catch(() => {});
+        }
     }
 }
 
@@ -1742,7 +1895,10 @@ if (micBtn) micBtn.onclick = async () => {   /* #56 — null guard */
        На iOS/Safari AudioContext требует явного gesture для resume после создания. */
     ensureAudioCtxRunning();
     /* audioOnly=true: запрашиваем только микрофон, не спрашиваем разрешение на камеру. */
+    const hadNoStream = !localStream;
     if (!localStream) { await startCamera(undefined, /*audioOnly=*/true); if (!localStream) return; }
+    /* Bug fix: если поток создан впервые, синхронизируем аудио-сендеры */
+    if (hadNoStream) syncPeerAudioSenders();
     micEnabled = !micEnabled;
     const micAudioTrack = localStream.getAudioTracks()[0];
     if (micAudioTrack) {
@@ -1783,7 +1939,10 @@ function setCamIcon() {
 }
 if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
     ensureAudioCtxRunning();
+    const hadNoStream = !localStream;
     if (!localStream) { await startCamera(); if (!localStream) return; }
+    /* Bug fix: если поток создан впервые, синхронизируем аудио-сендеры */
+    if (hadNoStream) syncPeerAudioSenders();
     camEnabled = !camEnabled;
 
     if (!camEnabled) {
@@ -1827,8 +1986,6 @@ if (camBtn) camBtn.onclick = async () => {   /* #57 — null guard */
         if (camEnabled) showVideoInBox("local", localStream, true, false);
         else            showAvatarInBox("local", avatar);
     }
-    /* Notify fx-effects.js that camera track changed */
-    document.dispatchEvent(new CustomEvent("vc:camera-changed"));
 };
 
 if (flipBtn) { flipBtn.onclick = () => switchCamera(); }
@@ -1853,6 +2010,9 @@ if (noiseBtn) noiseBtn.onclick = async () => {
     if (_noiseToggling) return; /* Bug fix: race condition — игнорируем пока предыдущий запрос не завершён */
     noiseEnabled = !noiseEnabled;
     setNoiseIcon();
+
+    /* Всегда показываем тост — даже если микрофон ещё не активирован */
+    showToast(noiseEnabled ? "Шумоподавление включено" : "Шумоподавление выключено", "success", 2500);
 
     /* Если микрофон ещё не активирован — просто запоминаем настройку */
     if (!localStream || !micEnabled) return;
@@ -1906,9 +2066,8 @@ if (noiseBtn) noiseBtn.onclick = async () => {
             if (micEnabled) monitorSpeaking("local", localStream);
         }
 
-        showToast(noiseEnabled ? "Шумоподавление включено" : "Шумоподавление выключено", "success", 2500);
     } catch (e) {
-        /* Если не удалось — откатываем состояние */
+        /* Если не удалось — откатываем состояние и обновляем тост */
         noiseEnabled = !noiseEnabled;
         setNoiseIcon();
         console.warn("[noise] toggleNoise failed:", e);
