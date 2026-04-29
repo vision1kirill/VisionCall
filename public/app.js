@@ -574,6 +574,8 @@ function showVideoInBox(id, stream, muted, isScreen) {
                         /* Обновляем peerMeta на случай если media-state не дошёл */
                         if (peerMeta[id]) peerMeta[id].cam = false;
                         updateLabelIcons(id, peerMeta[id]?.mic ?? false, false);
+                        /* #81 — Сохраняем аудио после удаления video элемента */
+                        if (peerVideoStreams[id]) ensureRemoteAudio(id, peerVideoStreams[id]);
                     }
                 }, 1500);
             };
@@ -583,6 +585,8 @@ function showVideoInBox(id, stream, muted, isScreen) {
                     showAvatarInBox(id, peerMeta[id]?.avatar || "default");
                     if (peerMeta[id]) peerMeta[id].cam = false;
                     updateLabelIcons(id, peerMeta[id]?.mic ?? false, false);
+                    /* #81 — Сохраняем аудио после удаления video элемента */
+                    if (peerVideoStreams[id]) ensureRemoteAudio(id, peerVideoStreams[id]);
                 }
             };
         }
@@ -1966,6 +1970,12 @@ socket.on("media-state", data => {
         } else if (!data.cam) {
             /* Камера выключилась — показываем аватар */
             showAvatarInBox(data.from, peerMeta[data.from]?.avatar || "default");
+            /* #81 — Создаём <audio> элемент чтобы аудио не пропало после удаления <video>.
+               showAvatarInBox удаляет video.srcObject = null → аудио из этого потока глохнет.
+               ensureRemoteAudio подхватывает тот же поток и продолжает воспроизведение. */
+            if (peerVideoStreams[data.from]) {
+                ensureRemoteAudio(data.from, peerVideoStreams[data.from]);
+            }
         }
     }
 });
