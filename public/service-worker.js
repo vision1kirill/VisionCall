@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════════════════
-   VisionCall Service Worker — v3
+   VisionCall Service Worker — v4
    Cache strategy:
    - Images / icons / manifest → cache-first (rarely change)
    - JS / CSS / HTML → network-first, NEVER served stale
    - API & socket.io → network-only (never intercepted)
 ═══════════════════════════════════════════════ */
 
-const CACHE_NAME = "visioncall-v3";
+const CACHE_NAME = "visioncall-v4";
 
 /* Only pre-cache truly static binary assets */
 const PRECACHE_URLS = [

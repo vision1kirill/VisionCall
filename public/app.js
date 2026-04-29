@@ -203,7 +203,8 @@ function getSilentAudioTrack() {
     if (_silentTrack && _silentTrack.readyState === "live") return _silentTrack;
     try {
         if (!_silentCtx || _silentCtx.state === "closed") {
-            _silentCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+            _silentCtx = new (window.AudioContext || window.webkitAudioContext)();
+            _silentCtx.resume().catch(() => {});
         }
         const dest = _silentCtx.createMediaStreamDestination();
         /* Oscillator → Gain(0) → dest: трек "живой" (readyState=live), но полностью тихий */
@@ -1338,8 +1339,10 @@ function createPeer(id) {
 
     pc.onnegotiationneeded = async () => {
         if (makingOffer[id]) return;
-        /* #75 — Не начинаем negotiation если PC уже закрыт */
+        /* #75 — Не начинаем negotiation если PC уже закрыт или нестабилен */
         if (pc.signalingState === "closed") return;
+        /* #76 — Ранняя проверка stable: предотвращает повторный offer в mid-negotiation */
+        if (pc.signalingState !== "stable") return;
         try {
             makingOffer[id] = true;
             const offer = await pc.createOffer();
@@ -1378,7 +1381,8 @@ function createPeer(id) {
                 /* Демонстрация экрана: ontrack пришёл после screen-share-state */
                 showVideoInBox(id, e.streams[0], false, true);
                 monitorSpeaking(id, e.streams[0]);
-                if (peerAudioEls[id]) {
+                /* #80 — guard: удаляем только если поток содержит аудио */
+                if (peerAudioEls[id] && e.streams[0].getAudioTracks().length > 0) {
                     peerAudioEls[id].srcObject = null;
                     peerAudioEls[id].remove();
                     delete peerAudioEls[id];
@@ -1386,8 +1390,10 @@ function createPeer(id) {
             } else if (peerMeta[id]?.cam) {
                 showVideoInBox(id, e.streams[0], false, false);
                 monitorSpeaking(id, e.streams[0]);
-                /* Убираем audio-only элемент: теперь аудио воспроизводит <video> */
-                if (peerAudioEls[id]) {
+                /* #80 — Убираем audio-only элемент ТОЛЬКО если видео-поток несёт аудио-трек.
+                   Если audio и video были добавлены с разным stream ID (баг stream-mismatch),
+                   <video>.srcObject не содержит аудио → удалять <audio> нельзя. */
+                if (peerAudioEls[id] && e.streams[0].getAudioTracks().length > 0) {
                     peerAudioEls[id].srcObject = null;
                     peerAudioEls[id].remove();
                     delete peerAudioEls[id];
@@ -1667,22 +1673,32 @@ socket.on("user-connected", async data => {
 
     const pc = createPeer(data.id);
 
+    /* #77 — Устанавливаем makingOffer ДО любых addTrack: иначе onnegotiationneeded
+       может сработать между addTrack и makingOffer=true и создать параллельный offer */
+    makingOffer[data.id] = true;
+
     if (localStream) {
         localStream.getTracks().forEach(track => {
             if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
         });
     }
+    /* #78 — Используем ОДИН объект MediaStream-заглушки для video и audio.
+       Если создавать new MediaStream() дважды — у них разные stream ID, и на приёмной
+       стороне видео-поток и аудио-поток окажутся в разных «группах». Когда собеседник
+       включает камеру — audio element (stream S2) удаляется, а video element (stream S1)
+       не содержит аудио → аудио навсегда теряется. Один ph → один stream ID. */
+    const ph = localStream || new MediaStream();
     /* Если камера выключена, добавляем чёрный трек чтобы видео-сендер существовал
        и у собеседника был корректный видео-слот (включим камеру — просто replaceTrack) */
     if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
-        pc.addTrack(getBlackVideoTrack(), localStream || new MediaStream());
+        pc.addTrack(getBlackVideoTrack(), ph);
     }
     /* Гарантируем аудио-сендер с самого начала: если нет — добавляем тихий трек-заглушку.
        Это обеспечивает аудио m-line в SDP при первом offer/answer даже когда микрофон выключен.
        При включении микрофона достаточно replaceTrack — renegotiation не нужна. */
     if (!pc.getSenders().some(s => s.track?.kind === "audio")) {
         const silentTrack = getSilentAudioTrack();
-        if (silentTrack) pc.addTrack(silentTrack, localStream || new MediaStream());
+        if (silentTrack) pc.addTrack(silentTrack, ph);
     }
     if (screenEnabled && screenStream) {
         /* Видео экрана: заменяем видео-сендер (replaceTrack, без renegotiation) */
@@ -1708,7 +1724,7 @@ socket.on("user-connected", async data => {
     }
 
     try {
-        makingOffer[data.id] = true;
+        /* makingOffer[data.id] уже выставлен выше, ДО addTrack — см. #77 */
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit("offer", { offer: pc.localDescription, to: data.id });
@@ -1744,24 +1760,28 @@ socket.on("offer", async data => {
         catch (e) { console.warn("rollback failed:", e); return; }
     }
 
-    if (localStream) {
-        localStream.getTracks().forEach(track => {
-            if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
-        });
-    }
-    /* Если камера выключена, добавляем чёрный трек чтобы видео-сендер существовал */
-    if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
-        pc.addTrack(getBlackVideoTrack(), localStream || new MediaStream());
-    }
-    /* Гарантируем аудио-сендер (тихий трек) если ещё нет — см. комментарий в user-connected */
-    if (!pc.getSenders().some(s => s.track?.kind === "audio")) {
-        const silentTrack = getSilentAudioTrack();
-        if (silentTrack) pc.addTrack(silentTrack, localStream || new MediaStream());
-    }
-
     try {
+        /* #79 — setRemoteDescription ПЕРВЫМ: addTrack до setRemoteDescription
+           запускает onnegotiationneeded в состоянии "stable", что создаёт
+           параллельный offer пока мы ещё обрабатываем входящий. */
         await pc.setRemoteDescription(data.offer);
         await flushCandidates(data.from);
+
+        /* #78 — addTrack ПОСЛЕ setRemoteDescription, один shared ph */
+        if (localStream) {
+            localStream.getTracks().forEach(track => {
+                if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
+            });
+        }
+        const ph = localStream || new MediaStream();
+        if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
+            pc.addTrack(getBlackVideoTrack(), ph);
+        }
+        if (!pc.getSenders().some(s => s.track?.kind === "audio")) {
+            const silentTrack = getSilentAudioTrack();
+            if (silentTrack) pc.addTrack(silentTrack, ph);
+        }
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit("answer", { answer: pc.localDescription, to: data.from });
@@ -1935,7 +1955,10 @@ socket.on("media-state", data => {
             /* Камера включилась — показываем видео */
             showVideoInBox(data.from, peerVideoStreams[data.from], false, false);
             monitorSpeaking(data.from, peerVideoStreams[data.from]);
-            if (peerAudioEls[data.from]) {
+            /* #80 — Удаляем <audio> элемент только если в видео-потоке есть аудио-трек.
+               Иначе аудио пропадёт навсегда (stream ID mismatch сценарий). */
+            if (peerAudioEls[data.from] &&
+                peerVideoStreams[data.from].getAudioTracks().length > 0) {
                 peerAudioEls[data.from].srcObject = null;
                 peerAudioEls[data.from].remove();
                 delete peerAudioEls[data.from];
