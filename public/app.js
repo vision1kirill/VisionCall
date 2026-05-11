@@ -542,7 +542,11 @@ function showVideoInBox(id, stream, muted, isScreen) {
 
     const video = document.createElement("video");
     video.autoplay    = true;
-    video.muted       = muted;
+    /* #82 — Удалённые видео-элементы всегда заглушены: аудио воспроизводит
+       отдельный <audio> элемент (ensureRemoteAudio). Это предотвращает
+       двойной звук и устраняет весь класс багов "аудио пропало при смене
+       состояния камеры", т.к. <audio> элемент никогда не зависит от <video>. */
+    video.muted       = (id !== "local") ? true : muted;
     video.srcObject   = stream;
     video.playsInline = true;
     if (isScreen) {
@@ -614,17 +618,43 @@ function showAvatarInBox(id, userAvatar) {
     }
 }
 
-/* Аудио для участника без камеры */
+/* ════════════════════════════════════════════
+   ГАРАНТИРОВАННОЕ АУДИО ДЛЯ УДАЛЁННЫХ УЧАСТНИКОВ
+   Инвариант: для каждого удалённого участника ВСЕГДА существует
+   живой <audio> элемент, независимо от состояния его камеры.
+   Аудио-элемент НИКОГДА не удаляется при манипуляциях с видео.
+════════════════════════════════════════════ */
 function ensureRemoteAudio(id, stream) {
-    if (peerAudioEls[id]) {
-        peerAudioEls[id].srcObject = stream;
+    if (!stream) return;
+
+    const audioTrack = stream.getAudioTracks()[0];
+    const trackState = audioTrack ? audioTrack.readyState : "no-track";
+
+    const existing = peerAudioEls[id];
+
+    /* Случай 1: элемент есть и подключён к правильному живому потоку — ничего не делаем */
+    if (existing && existing.srcObject === stream && trackState === "live") {
+        console.log(`[AUDIO] ensureRemoteAudio peer=${id} action=reused trackState=${trackState}`);
         return;
     }
+
+    /* Случай 2: элемент есть, но поток неверный или трек мёртв — пересоздаём */
+    if (existing) {
+        existing.pause();
+        existing.srcObject = null;
+        existing.remove();
+        delete peerAudioEls[id];
+        console.log(`[AUDIO] ensureRemoteAudio peer=${id} action=recreated trackState=${trackState}`);
+    } else {
+        console.log(`[AUDIO] ensureRemoteAudio peer=${id} action=created trackState=${trackState}`);
+    }
+
+    /* Создаём новый <audio> элемент */
     const audio = document.createElement("audio");
     audio.autoplay  = true;
     audio.srcObject = stream;
     document.body.appendChild(audio);
-    audio.play().catch(() => {}); /* Bug fix: явный play() для autoplay policy */
+    audio.play().catch(e => console.warn(`[AUDIO] play() blocked for peer=${id}:`, e));
     peerAudioEls[id] = audio;
 }
 
@@ -1338,6 +1368,9 @@ async function updateQualityIndicator(id, pc) {
 ════════════════════════════════════════════ */
 function createPeer(id) {
     if (peerConnections[id]) return peerConnections[id];
+    /* #diag — Логируем ICE-серверы при создании каждого PeerConnection.
+       В DevTools → Console можно увидеть есть ли TURN среди серверов. */
+    console.log(`[ICE servers] for peer ${id}:`, JSON.stringify(servers.iceServers));
     const pc = new RTCPeerConnection(servers);
     makingOffer[id] = false;
 
@@ -1385,23 +1418,11 @@ function createPeer(id) {
                 /* Демонстрация экрана: ontrack пришёл после screen-share-state */
                 showVideoInBox(id, e.streams[0], false, true);
                 monitorSpeaking(id, e.streams[0]);
-                /* #80 — guard: удаляем только если поток содержит аудио */
-                if (peerAudioEls[id] && e.streams[0].getAudioTracks().length > 0) {
-                    peerAudioEls[id].srcObject = null;
-                    peerAudioEls[id].remove();
-                    delete peerAudioEls[id];
-                }
+                /* #82 — НЕ удаляем peerAudioEls: видео заглушено, аудио живёт отдельно */
             } else if (peerMeta[id]?.cam) {
                 showVideoInBox(id, e.streams[0], false, false);
                 monitorSpeaking(id, e.streams[0]);
-                /* #80 — Убираем audio-only элемент ТОЛЬКО если видео-поток несёт аудио-трек.
-                   Если audio и video были добавлены с разным stream ID (баг stream-mismatch),
-                   <video>.srcObject не содержит аудио → удалять <audio> нельзя. */
-                if (peerAudioEls[id] && e.streams[0].getAudioTracks().length > 0) {
-                    peerAudioEls[id].srcObject = null;
-                    peerAudioEls[id].remove();
-                    delete peerAudioEls[id];
-                }
+                /* #82 — НЕ удаляем peerAudioEls: видео заглушено, аудио живёт отдельно */
             } else {
                 /* cam ещё не подтверждена — показываем аватар */
                 showAvatarInBox(id, meta.avatar);
@@ -1409,29 +1430,34 @@ function createPeer(id) {
         } else if (e.track.kind === "audio") {
             /* Guard: track без stream */
             if (!e.streams || !e.streams[0]) return;
-            const box           = document.getElementById("box-" + id);
-            const existingVideo = box?.querySelector("video");
-            if (!existingVideo) {
-                /* Камера выключена (или видео ещё не пришло) — нужен отдельный <audio> */
+            /* #82 — ИНВАРИАНТ: аудио-элемент существует ВСЕГДА, независимо от камеры.
+               Мы больше не полагаемся на <video srcObject=stream> для воспроизведения аудио —
+               это ломается при выключении камеры, смене потока, showAvatarInBox и т.д.
+               Вместо этого: <audio> всегда есть, <video> всегда заглушён (muted).
+               Это исключает весь класс багов "аудио пропало при смене состояния камеры". */
+            if (screenSharingPeers.has(id)) {
+                /* Screen share: аудио экрана — отдельный элемент через showRemoteScreenAudio */
+                showRemoteScreenAudio(id, e.streams[0]);
+            } else {
                 ensureRemoteAudio(id, e.streams[0]);
                 monitorSpeaking(id, e.streams[0]);
-            } else if (existingVideo.srcObject !== e.streams[0]) {
-                /* Аудио в ДРУГОМ потоке нежели видео (например, видео-сендер был добавлен
-                   с пустым MediaStream, а аудио добавлено позже с localStream).
-                   Без явного <audio> звук бы потерялся — создаём его. */
-                if (screenSharingPeers.has(id)) {
-                    showRemoteScreenAudio(id, e.streams[0]);
-                } else {
-                    ensureRemoteAudio(id, e.streams[0]);
-                    monitorSpeaking(id, e.streams[0]);
-                }
             }
-            /* Если streamId совпадает — аудио уже воспроизводит <video srcObject=stream> */
         }
     };
 
     pc.onicecandidate = e => {
-        if (e.candidate) socket.emit("ice-candidate", { candidate: e.candidate, to: id });
+        if (e.candidate) {
+            /* #diag — Логируем тип кандидата:
+               host   = локальный IP (прямое соединение)
+               srflx  = STUN (публичный IP через NAT)
+               relay  = TURN (медиа идёт через ретранслятор)
+               Если relay не появляется — TURN не работает. */
+            const type = e.candidate.type || e.candidate.candidate?.match(/typ (\w+)/)?.[1] || "unknown";
+            console.log(`[ICE candidate] peer=${id} type=${type} protocol=${e.candidate.protocol || "?"}`);
+            socket.emit("ice-candidate", { candidate: e.candidate, to: id });
+        } else {
+            console.log(`[ICE candidate] peer=${id} gathering complete`);
+        }
     };
 
     pc.onconnectionstatechange = () => {
@@ -1463,8 +1489,34 @@ function createPeer(id) {
             }
         }
 
-        /* #76 — Проверяем что PC не закрыт перед restartIce (иначе DOMException) */
-        if (state === "failed" && pc.signalingState !== "closed") pc.restartIce();
+        /* #76 — При failed: сначала restartIce() (быстрый путь).
+           Через 3 сек, если соединение всё ещё не восстановилось — делаем
+           полный createOffer({iceRestart:true}). Это нужно потому что
+           restartIce() запускает onnegotiationneeded, но он может упасть
+           из-за guard'а signalingState !== "stable" если в этот момент
+           идёт другая negotiation. Явный createOffer гарантирован. */
+        if (state === "failed" && pc.signalingState !== "closed") {
+            console.warn(`[ICE] connectionState=failed for peer=${id}, calling restartIce()`);
+            pc.restartIce();
+            setTimeout(async () => {
+                const cur = peerConnections[id];
+                if (!cur || cur !== pc) return; /* PC уже заменён — не трогаем */
+                if (pc.connectionState === "connected" || pc.connectionState === "closed") return;
+                if (pc.signalingState === "closed") return;
+                console.warn(`[ICE] peer=${id} still not connected after restartIce — forcing createOffer({iceRestart:true})`);
+                try {
+                    makingOffer[id] = true;
+                    const offer = await pc.createOffer({ iceRestart: true });
+                    if (pc.signalingState === "closed") return;
+                    await pc.setLocalDescription(offer);
+                    socket.emit("offer", { offer: pc.localDescription, to: id });
+                } catch (e) {
+                    console.error(`[ICE] forced iceRestart offer failed for peer=${id}:`, e);
+                } finally {
+                    makingOffer[id] = false;
+                }
+            }, 3000);
+        }
         /* Проверяем что этот PC всё ещё «текущий» для данного peer-а,
            чтобы stale-ивент закрытого старого соединения не убрал новый бокс. */
         if (state === "closed" && peerConnections[id] === pc) removeVideoBox(id);
@@ -1952,6 +2004,11 @@ socket.on("media-state", data => {
     peerMeta[data.from].mic = data.mic;
     peerMeta[data.from].cam = data.cam;
     updateLabelIcons(data.from, data.mic, data.cam);
+    /* #82 — При любом изменении состояния (mic/cam) проверяем аудио-инвариант.
+       Если поток известен — убеждаемся что <audio> элемент жив и подключён. */
+    if (peerVideoStreams[data.from]) {
+        ensureRemoteAudio(data.from, peerVideoStreams[data.from]);
+    }
 
     /* Переключаем аватар ↔ видео если состояние камеры изменилось */
     if (prevCam !== data.cam) {
@@ -1959,14 +2016,8 @@ socket.on("media-state", data => {
             /* Камера включилась — показываем видео */
             showVideoInBox(data.from, peerVideoStreams[data.from], false, false);
             monitorSpeaking(data.from, peerVideoStreams[data.from]);
-            /* #80 — Удаляем <audio> элемент только если в видео-потоке есть аудио-трек.
-               Иначе аудио пропадёт навсегда (stream ID mismatch сценарий). */
-            if (peerAudioEls[data.from] &&
-                peerVideoStreams[data.from].getAudioTracks().length > 0) {
-                peerAudioEls[data.from].srcObject = null;
-                peerAudioEls[data.from].remove();
-                delete peerAudioEls[data.from];
-            }
+            /* #82 — НЕ удаляем peerAudioEls при включении камеры.
+               Видео-элемент заглушён (video.muted=true), аудио идёт только через <audio>. */
         } else if (!data.cam) {
             /* Камера выключилась — показываем аватар */
             showAvatarInBox(data.from, peerMeta[data.from]?.avatar || "default");

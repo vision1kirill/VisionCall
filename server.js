@@ -5,6 +5,42 @@ const { Server } = require("socket.io");
 const app    = express();
 const server = http.createServer(app);
 
+/* ════════════════════════════════════════════
+   TURN ДИАГНОСТИКА — печатается один раз при старте
+════════════════════════════════════════════ */
+(function logTurnConfig() {
+    const meteredKey    = process.env.METERED_API_KEY;
+    const meteredDomain = process.env.METERED_DOMAIN;
+    const turnUrl       = process.env.TURN_URL;
+    const turnUser      = process.env.TURN_USERNAME;
+    const turnCred      = process.env.TURN_CREDENTIAL;
+
+    const hasMeter  = !!(meteredKey && meteredDomain);
+    const hasStatic = !!(turnUrl && turnUser && turnCred);
+
+    if (hasMeter) {
+        /* Маскируем ключ: первые 4 + последние 4 символа */
+        const masked = meteredKey.length > 8
+            ? meteredKey.slice(0, 4) + "..." + meteredKey.slice(-4)
+            : "****";
+        console.log(`[TURN] Provider: metered, domain: ${meteredDomain}, api_key: ${masked}`);
+    } else {
+        console.warn("┌─────────────────────────────────────────────────────┐");
+        console.warn("│  [TURN] NOT CONFIGURED — running on STUN only       │");
+        console.warn("│  Connections behind symmetric NAT will FAIL silently │");
+        console.warn("│  Set METERED_API_KEY + METERED_DOMAIN in Railway Env │");
+        console.warn("└─────────────────────────────────────────────────────┘");
+    }
+
+    if (hasStatic) {
+        console.log(`[TURN] Static TURN also configured: ${turnUrl}`);
+    }
+
+    if (!hasMeter && !hasStatic) {
+        console.warn("[TURN] No TURN provider at all — STUN-only mode.");
+    }
+})();
+
 /* ── CORS — в проде задайте ALLOWED_ORIGIN в Railway Variables ── */
 const io = new Server(server, {
     cors: {
@@ -136,27 +172,40 @@ app.get("/api/ice-servers", async (_req, res) => {
     if (meteredKey && meteredDomain) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 5000);
+        const url = `https://${meteredDomain}/api/v1/turn/credentials?apiKey=${meteredKey}`;
+        console.log(`[TURN] Fetching credentials from: https://${meteredDomain}/api/v1/turn/credentials?apiKey=****`);
         try {
-            const url  = `https://${meteredDomain}/api/v1/turn/credentials?apiKey=${meteredKey}`;
             const resp = await fetch(url, { signal: controller.signal });
+            const bodyText = await resp.text();
             if (resp.ok) {
-                const list = await resp.json();
-                if (Array.isArray(list)) {
+                let list;
+                try { list = JSON.parse(bodyText); } catch (_) {
+                    console.error(`[TURN] Metered response is not valid JSON: ${bodyText.slice(0, 200)}`);
+                    list = null;
+                }
+                if (Array.isArray(list) && list.length > 0) {
                     iceServers.push(...list);
-                    console.log(`[ice] Metered: got ${list.length} servers`);
+                    const types = list.map(s => (Array.isArray(s.urls) ? s.urls[0] : s.urls)?.split(":")[0]).join(", ");
+                    console.log(`[TURN] Metered OK: got ${list.length} servers (${types})`);
+                } else if (Array.isArray(list)) {
+                    console.warn(`[TURN] Metered returned empty array — check API key and domain`);
                 } else {
-                    console.warn("[ice] Metered: unexpected response format", list);
+                    console.warn(`[TURN] Metered unexpected format: ${bodyText.slice(0, 200)}`);
                 }
             } else {
-                console.warn(`[ice] Metered API error ${resp.status}`);
+                console.error(`[TURN] Metered HTTP ${resp.status} — body: ${bodyText.slice(0, 500)}`);
             }
         } catch (e) {
-            console.warn("[ice] Metered fetch failed:", e.message);
+            if (e.name === "AbortError") {
+                console.error(`[TURN] Metered request timed out after 5s — domain: ${meteredDomain}`);
+            } else {
+                console.error(`[TURN] Metered fetch failed: ${e.message}`);
+            }
         } finally {
             clearTimeout(timer);
         }
     } else {
-        console.warn("[ice] METERED_API_KEY or METERED_DOMAIN not set");
+        console.warn("[TURN] METERED_API_KEY or METERED_DOMAIN not set — skipping Metered");
     }
 
     /* ── Режим B: статичный TURN (любой провайдер) ── */
@@ -303,8 +352,13 @@ io.on("connection", socket => {
     /* ── Signaling — все три события проверяют членство в одной комнате ── */
     socket.on("offer", data => {
         if (!data.to || !sameRoom(socket, data.to)) return;
-        /* Rate-limit: до 30 offer за 10 сек — защита от флуда сигнализацией */
-        if (!rateLimit(socket.id, "offer", 30, 10_000)) return;
+        /* Rate-limit: до 60 offer за 10 сек.
+           Повышено с 30 → при 5 участниках все одновременно шлют offer новому,
+           плюс возможны повторные offer при iceRestart — 30 было мало. */
+        if (!rateLimit(socket.id, "offer", 60, 10_000)) {
+            console.warn(`[RATE LIMIT] socket=${socket.id} event=offer dropped at ${new Date().toISOString()}`);
+            return;
+        }
         /* #66 — Проверяем что offer является объектом с типом SDP */
         if (!data.offer || typeof data.offer !== "object" || data.offer.type !== "offer") return;
         io.to(data.to).emit("offer", {
