@@ -138,19 +138,32 @@ app.get("/api/online", (_req, res) => {
 /* ════════════════════════════════════════════
    ICE SERVERS — TURN кредыциалы никогда не
    попадают в клиентский JS, только через этот
-   эндпоинт. Поддерживает два режима:
+   эндпоинт.
 
-   Режим A — Metered.ca (рекомендуется, 50 GB/мес бесплатно):
-     METERED_API_KEY=<ключ>
-     METERED_DOMAIN=<yourapp>.metered.live
+   Приоритет источников TURN:
+   1. Metered.ca (если METERED_API_KEY + METERED_DOMAIN заданы и API отвечает 200)
+   2. OpenRelay — бесплатный публичный TURN без регистрации (автоматический fallback)
+   3. Статичный TURN (TURN_URL + TURN_USERNAME + TURN_CREDENTIAL) — опционально поверх
 
-   Режим B — любой TURN-сервер (Twilio, coturn, Xirsys…):
-     TURN_URL=turn:your-server.com:3478
-     TURN_USERNAME=user
-     TURN_CREDENTIAL=password
-
-   Можно использовать оба одновременно.
+   STUN от Google добавляется всегда.
 ════════════════════════════════════════════ */
+
+/* OpenRelay — публичный TURN от Metered.ca без ключа.
+   Используется как fallback если приватный Metered недоступен.
+   Лимиты: 500 MB/мес бесплатно, без гарантий uptime.
+   Подходит для разработки и небольшой нагрузки. */
+const OPENRELAY_ICE_SERVERS = [
+    { urls: "stun:stun.relay.metered.ca:80" },
+    { urls: "turn:global.relay.metered.ca:80",
+      username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:global.relay.metered.ca:443",
+      username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turns:global.relay.metered.ca:443?transport=tcp",
+      username: "openrelayproject", credential: "openrelayproject" },
+];
+
 let   _iceCache    = null;
 let   _iceCacheAt  = 0;
 const ICE_CACHE_MS = 50 * 60 * 1000; /* 50 минут — кредыциалы живут 1 час */
@@ -161,6 +174,7 @@ app.get("/api/ice-servers", async (_req, res) => {
         return res.json({ iceServers: _iceCache });
     }
 
+    /* STUN всегда в списке */
     const iceServers = [
         { urls: "stun:stun.l.google.com:19302"  },
         { urls: "stun:stun1.l.google.com:19302" },
@@ -168,59 +182,79 @@ app.get("/api/ice-servers", async (_req, res) => {
 
     /* ── Режим A: Metered.ca — time-limited credentials ── */
     const meteredKey    = process.env.METERED_API_KEY;
-    const meteredDomain = process.env.METERED_DOMAIN; /* yourapp.metered.live */
+    const meteredDomain = process.env.METERED_DOMAIN;
+    let   meteredOk     = false;  /* флаг: Metered отдал живые TURN-сервера */
+    let   meteredFail   = "";     /* причина отказа для лога */
+
     if (meteredKey && meteredDomain) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 5000);
         const url = `https://${meteredDomain}/api/v1/turn/credentials?apiKey=${meteredKey}`;
         console.log(`[TURN] Fetching credentials from: https://${meteredDomain}/api/v1/turn/credentials?apiKey=****`);
         try {
-            const resp = await fetch(url, { signal: controller.signal });
+            const resp     = await fetch(url, { signal: controller.signal });
             const bodyText = await resp.text();
             if (resp.ok) {
                 let list;
                 try { list = JSON.parse(bodyText); } catch (_) {
                     console.error(`[TURN] Metered response is not valid JSON: ${bodyText.slice(0, 200)}`);
-                    list = null;
+                    meteredFail = "invalid JSON response";
                 }
                 if (Array.isArray(list) && list.length > 0) {
                     iceServers.push(...list);
                     const types = list.map(s => (Array.isArray(s.urls) ? s.urls[0] : s.urls)?.split(":")[0]).join(", ");
                     console.log(`[TURN] Metered OK: got ${list.length} servers (${types})`);
+                    meteredOk = true;
                 } else if (Array.isArray(list)) {
-                    console.warn(`[TURN] Metered returned empty array — check API key and domain`);
-                } else {
-                    console.warn(`[TURN] Metered unexpected format: ${bodyText.slice(0, 200)}`);
+                    meteredFail = "empty array returned";
+                    console.warn(`[TURN] Metered returned empty array — will use OpenRelay fallback`);
+                } else if (!meteredFail) {
+                    meteredFail = `unexpected format: ${bodyText.slice(0, 100)}`;
+                    console.warn(`[TURN] Metered unexpected format, will use OpenRelay fallback`);
                 }
             } else {
+                meteredFail = `HTTP ${resp.status}: ${bodyText.slice(0, 200)}`;
                 console.error(`[TURN] Metered HTTP ${resp.status} — body: ${bodyText.slice(0, 500)}`);
             }
         } catch (e) {
             if (e.name === "AbortError") {
+                meteredFail = "request timed out after 5s";
                 console.error(`[TURN] Metered request timed out after 5s — domain: ${meteredDomain}`);
             } else {
+                meteredFail = e.message;
                 console.error(`[TURN] Metered fetch failed: ${e.message}`);
             }
         } finally {
             clearTimeout(timer);
         }
-    } else {
-        console.warn("[TURN] METERED_API_KEY or METERED_DOMAIN not set — skipping Metered");
     }
 
-    /* ── Режим B: статичный TURN (любой провайдер) ── */
+    /* ── Fallback: OpenRelay если Metered не сработал или не настроен ── */
+    if (!meteredOk) {
+        iceServers.push(...OPENRELAY_ICE_SERVERS);
+        if (meteredKey && meteredDomain) {
+            console.log(`[TURN] Mode: openrelay (fallback, metered failed: ${meteredFail})`);
+        } else {
+            console.log(`[TURN] Mode: openrelay (no metered config)`);
+        }
+    } else {
+        console.log(`[TURN] Mode: metered (api ok)`);
+    }
+
+    /* ── Режим B: статичный TURN (любой провайдер) — опционально поверх ── */
     const turnUrl  = process.env.TURN_URL;
     const turnUser = process.env.TURN_USERNAME;
     const turnCred = process.env.TURN_CREDENTIAL;
     if (turnUrl && turnUser && turnCred) {
-        /* TURN_URL может содержать несколько URL через запятую */
         const urls = turnUrl.split(",").map(u => u.trim()).filter(Boolean);
         iceServers.push({ urls, username: turnUser, credential: turnCred });
+        console.log(`[TURN] Static TURN also added: ${urls.join(", ")}`);
     }
 
     _iceCache   = iceServers;
     _iceCacheAt = Date.now();
 
+    console.log(`[TURN] Returning ${iceServers.length} ICE servers total`);
     res.json({ iceServers });
 });
 
