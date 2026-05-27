@@ -1738,26 +1738,16 @@ socket.on("user-connected", async data => {
             if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, localStream);
         });
     }
-    /* #78 — Используем ОДИН объект MediaStream-заглушки для video и audio.
-       Если создавать new MediaStream() дважды — у них разные stream ID, и на приёмной
-       стороне видео-поток и аудио-поток окажутся в разных «группах». Когда собеседник
-       включает камеру — audio element (stream S2) удаляется, а video element (stream S1)
-       не содержит аудио → аудио навсегда теряется. Один ph → один stream ID. */
+    /* #78 — Используем ОДИН объект MediaStream-заглушки для video и audio. */
     const ph = localStream || new MediaStream();
-    /* Если камера выключена, добавляем чёрный трек чтобы видео-сендер существовал
-       и у собеседника был корректный видео-слот (включим камеру — просто replaceTrack) */
     if (!camEnabled && !screenEnabled && !pc.getSenders().some(s => s.track?.kind === "video")) {
         pc.addTrack(getBlackVideoTrack(), ph);
     }
-    /* Гарантируем аудио-сендер с самого начала: если нет — добавляем тихий трек-заглушку.
-       Это обеспечивает аудио m-line в SDP при первом offer/answer даже когда микрофон выключен.
-       При включении микрофона достаточно replaceTrack — renegotiation не нужна. */
     if (!pc.getSenders().some(s => s.track?.kind === "audio")) {
         const silentTrack = getSilentAudioTrack();
         if (silentTrack) pc.addTrack(silentTrack, ph);
     }
     if (screenEnabled && screenStream) {
-        /* Видео экрана: заменяем видео-сендер (replaceTrack, без renegotiation) */
         const screenTrack = screenStream.getVideoTracks()[0];
         if (screenTrack) {
             const vSender = pc.getSenders().find(s => s.track?.kind === "video");
@@ -1767,9 +1757,6 @@ socket.on("user-connected", async data => {
                 pc.addTrack(screenTrack, screenStream);
             }
         }
-        /* Аудио экрана: если WebAudio-микс активен — заменяем аудио-сендер
-           смешанным треком. addTrack для аудио экрана вызывает renegotiation
-           и ломает звук на iOS. */
         if (screenAudioMix) {
             const mixedTrack = screenAudioMix.dest.stream.getAudioTracks()[0];
             if (mixedTrack) {
@@ -1779,8 +1766,27 @@ socket.on("user-connected", async data => {
         }
     }
 
+    /* #83 — Staggered offer delay: когда новый участник заходит, все существующие
+       одновременно создают offer — это лавина negotiation в первые секунды.
+       Решение: каждый вычисляет свою позицию среди участников (по отсортированным
+       socket ID) и задерживает offer на позиция×200мс.
+       Сортировка детерминирована — все участники видят одинаковый порядок.
+       Пример при 4 участниках: A=0мс, B=200мс, C=400мс, D=600мс.
+       makingOffer уже выставлен выше — onnegotiationneeded не вмешается за это время. */
+    const existingIds = [...Object.keys(peerConnections), socket.id].sort();
+    const myIndex     = existingIds.indexOf(socket.id);
+    const offerDelay  = myIndex * 200;
+    console.log(`[offer] staggered delay=${offerDelay}ms (position ${myIndex}/${existingIds.length - 1}) for peer=${data.id}`);
+
+    await new Promise(resolve => setTimeout(resolve, offerDelay));
+
+    /* После задержки проверяем что PC всё ещё актуален (участник мог выйти за это время) */
+    if (peerConnections[data.id] !== pc || pc.signalingState === "closed") {
+        makingOffer[data.id] = false;
+        return;
+    }
+
     try {
-        /* makingOffer[data.id] уже выставлен выше, ДО addTrack — см. #77 */
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit("offer", { offer: pc.localDescription, to: data.id });
