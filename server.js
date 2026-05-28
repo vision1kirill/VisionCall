@@ -136,22 +136,23 @@ app.get("/api/online", (_req, res) => {
 });
 
 /* ════════════════════════════════════════════
-   ICE SERVERS — TURN кредыциалы никогда не
-   попадают в клиентский JS, только через этот
-   эндпоинт.
+   ICE SERVERS — многоуровневая система TURN-провайдеров.
 
-   Приоритет источников TURN:
-   1. Metered.ca (если METERED_API_KEY + METERED_DOMAIN заданы и API отвечает 200)
-   2. OpenRelay — бесплатный публичный TURN без регистрации (автоматический fallback)
-   3. Статичный TURN (TURN_URL + TURN_USERNAME + TURN_CREDENTIAL) — опционально поверх
+   Все настроенные провайдеры работают ОДНОВРЕМЕННО —
+   браузер сам выбирает лучший relay-кандидат.
+   Если один провайдер исчерпал лимит или упал —
+   остальные продолжают работать.
 
-   STUN от Google добавляется всегда.
+   Слои (в порядке приоритета настройки):
+   1. Metered.ca private  — METERED_API_KEY + METERED_DOMAIN      (50 GB/мес)
+   2. Twilio NTS          — TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN (10k мин/мес)
+   3. Статичный TURN      — TURN_URL + TURN_USERNAME + TURN_CREDENTIAL (любой)
+   4. OpenRelay           — всегда включён как последний fallback   (500 MB/мес)
+
+   STUN Google добавляется всегда.
 ════════════════════════════════════════════ */
 
-/* OpenRelay — публичный TURN от Metered.ca без ключа.
-   Используется как fallback если приватный Metered недоступен.
-   Лимиты: 500 MB/мес бесплатно, без гарантий uptime.
-   Подходит для разработки и небольшой нагрузки. */
+/* OpenRelay — публичный TURN от Metered без ключа, последний рубеж обороны */
 const OPENRELAY_ICE_SERVERS = [
     { urls: "stun:stun.relay.metered.ca:80" },
     { urls: "turn:global.relay.metered.ca:80",
@@ -166,7 +167,18 @@ const OPENRELAY_ICE_SERVERS = [
 
 let   _iceCache    = null;
 let   _iceCacheAt  = 0;
-const ICE_CACHE_MS = 50 * 60 * 1000; /* 50 минут — кредыциалы живут 1 час */
+const ICE_CACHE_MS = 50 * 60 * 1000; /* 50 минут — временные кредыциалы живут 1 час */
+
+/* Вспомогательная функция: запрос к любому HTTP API с таймаутом */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 app.get("/api/ice-servers", async (_req, res) => {
     /* Отдаём кэш если свежий */
@@ -180,81 +192,104 @@ app.get("/api/ice-servers", async (_req, res) => {
         { urls: "stun:stun1.l.google.com:19302" },
     ];
 
-    /* ── Режим A: Metered.ca — time-limited credentials ── */
+    const activeSources = []; /* для итогового лога */
+    let   anyTurnAdded  = false;
+
+    /* ══ Провайдер 1: Metered.ca (приватный) ══════════════════════════════ */
     const meteredKey    = process.env.METERED_API_KEY;
     const meteredDomain = process.env.METERED_DOMAIN;
-    let   meteredOk     = false;  /* флаг: Metered отдал живые TURN-сервера */
-    let   meteredFail   = "";     /* причина отказа для лога */
-
     if (meteredKey && meteredDomain) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
         const url = `https://${meteredDomain}/api/v1/turn/credentials?apiKey=${meteredKey}`;
-        console.log(`[TURN] Fetching credentials from: https://${meteredDomain}/api/v1/turn/credentials?apiKey=****`);
+        console.log(`[TURN/metered] Fetching: https://${meteredDomain}/api/v1/turn/credentials?apiKey=****`);
         try {
-            const resp     = await fetch(url, { signal: controller.signal });
+            const resp     = await fetchWithTimeout(url);
             const bodyText = await resp.text();
             if (resp.ok) {
-                let list;
-                try { list = JSON.parse(bodyText); } catch (_) {
-                    console.error(`[TURN] Metered response is not valid JSON: ${bodyText.slice(0, 200)}`);
-                    meteredFail = "invalid JSON response";
-                }
+                const list = JSON.parse(bodyText);
                 if (Array.isArray(list) && list.length > 0) {
                     iceServers.push(...list);
-                    const types = list.map(s => (Array.isArray(s.urls) ? s.urls[0] : s.urls)?.split(":")[0]).join(", ");
-                    console.log(`[TURN] Metered OK: got ${list.length} servers (${types})`);
-                    meteredOk = true;
-                } else if (Array.isArray(list)) {
-                    meteredFail = "empty array returned";
-                    console.warn(`[TURN] Metered returned empty array — will use OpenRelay fallback`);
-                } else if (!meteredFail) {
-                    meteredFail = `unexpected format: ${bodyText.slice(0, 100)}`;
-                    console.warn(`[TURN] Metered unexpected format, will use OpenRelay fallback`);
+                    anyTurnAdded = true;
+                    activeSources.push(`metered(${list.length})`);
+                    console.log(`[TURN/metered] OK: ${list.length} servers`);
+                } else {
+                    console.warn(`[TURN/metered] Empty array — quota exhausted or key issue`);
                 }
             } else {
-                meteredFail = `HTTP ${resp.status}: ${bodyText.slice(0, 200)}`;
-                console.error(`[TURN] Metered HTTP ${resp.status} — body: ${bodyText.slice(0, 500)}`);
+                console.error(`[TURN/metered] HTTP ${resp.status}: ${bodyText.slice(0, 300)}`);
             }
         } catch (e) {
-            if (e.name === "AbortError") {
-                meteredFail = "request timed out after 5s";
-                console.error(`[TURN] Metered request timed out after 5s — domain: ${meteredDomain}`);
+            console.error(`[TURN/metered] Failed: ${e.name === "AbortError" ? "timeout 5s" : e.message}`);
+        }
+    }
+
+    /* ══ Провайдер 2: Twilio NTS ══════════════════════════════════════════
+       Регистрация: https://www.twilio.com/
+       Бесплатно: 10 000 минут/мес, очень надёжный.
+       Env vars: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
+    ══════════════════════════════════════════════════════════════════════ */
+    const twilioSid   = process.env.TWILIO_ACCOUNT_SID;
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+    if (twilioSid && twilioToken) {
+        const url  = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Tokens.json`;
+        const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString("base64");
+        console.log(`[TURN/twilio] Fetching NTS token for account ${twilioSid.slice(0, 8)}...`);
+        try {
+            const resp     = await fetchWithTimeout(url, {
+                method:  "POST",
+                headers: { "Authorization": `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" }
+            });
+            const bodyText = await resp.text();
+            if (resp.ok) {
+                const data = JSON.parse(bodyText);
+                if (Array.isArray(data.ice_servers) && data.ice_servers.length > 0) {
+                    /* Twilio возвращает поле url (не urls) — нормализуем */
+                    const normalized = data.ice_servers.map(s => ({
+                        urls:       s.urls || s.url,
+                        ...(s.username   && { username:   s.username   }),
+                        ...(s.credential && { credential: s.credential }),
+                    })).filter(s => s.urls);
+                    iceServers.push(...normalized);
+                    anyTurnAdded = true;
+                    activeSources.push(`twilio(${normalized.length})`);
+                    console.log(`[TURN/twilio] OK: ${normalized.length} servers, ttl=${data.ttl}s`);
+                } else {
+                    console.warn(`[TURN/twilio] Empty ice_servers array`);
+                }
             } else {
-                meteredFail = e.message;
-                console.error(`[TURN] Metered fetch failed: ${e.message}`);
+                console.error(`[TURN/twilio] HTTP ${resp.status}: ${bodyText.slice(0, 300)}`);
             }
-        } finally {
-            clearTimeout(timer);
+        } catch (e) {
+            console.error(`[TURN/twilio] Failed: ${e.name === "AbortError" ? "timeout 5s" : e.message}`);
         }
     }
 
-    /* ── Fallback: OpenRelay если Metered не сработал или не настроен ── */
-    if (!meteredOk) {
-        iceServers.push(...OPENRELAY_ICE_SERVERS);
-        if (meteredKey && meteredDomain) {
-            console.log(`[TURN] Mode: openrelay (fallback, metered failed: ${meteredFail})`);
-        } else {
-            console.log(`[TURN] Mode: openrelay (no metered config)`);
-        }
-    } else {
-        console.log(`[TURN] Mode: metered (api ok)`);
-    }
-
-    /* ── Режим B: статичный TURN (любой провайдер) — опционально поверх ── */
+    /* ══ Провайдер 3: статичный TURN (любой) ═════════════════════════════
+       Env vars: TURN_URL (через запятую), TURN_USERNAME, TURN_CREDENTIAL
+    ══════════════════════════════════════════════════════════════════════ */
     const turnUrl  = process.env.TURN_URL;
     const turnUser = process.env.TURN_USERNAME;
     const turnCred = process.env.TURN_CREDENTIAL;
     if (turnUrl && turnUser && turnCred) {
         const urls = turnUrl.split(",").map(u => u.trim()).filter(Boolean);
         iceServers.push({ urls, username: turnUser, credential: turnCred });
-        console.log(`[TURN] Static TURN also added: ${urls.join(", ")}`);
+        anyTurnAdded = true;
+        activeSources.push(`static(${urls.length})`);
+        console.log(`[TURN/static] Added: ${urls.join(", ")}`);
     }
+
+    /* ══ Провайдер 4: OpenRelay (всегда включён как fallback) ════════════
+       Если ни один провайдер выше не сработал — OpenRelay страхует.
+       Если провайдеры выше работают — OpenRelay добавляет дополнительные
+       relay-кандидаты, что увеличивает шанс установки соединения.
+    ══════════════════════════════════════════════════════════════════════ */
+    iceServers.push(...OPENRELAY_ICE_SERVERS);
+    activeSources.push("openrelay(5)");
 
     _iceCache   = iceServers;
     _iceCacheAt = Date.now();
 
-    console.log(`[TURN] Returning ${iceServers.length} ICE servers total`);
+    const mode = anyTurnAdded ? activeSources.join(" + ") : "openrelay-only";
+    console.log(`[TURN] Active providers: ${mode} | Total ICE servers: ${iceServers.length}`);
     res.json({ iceServers });
 });
 
