@@ -85,16 +85,10 @@ if (roomTitleEl) {
     /* Клик на код комнаты = копирование ссылки */
     roomTitleEl.onclick = () => {
         const url = `${location.origin}/?room=${encodeURIComponent(room)}`;
-        navigator.clipboard?.writeText(url)
-            .then(() => showToast("Ссылка скопирована!", "success", 2500))
-            .catch(() => {
-                try {
-                    const inp = document.createElement("input");
-                    inp.value = url; document.body.appendChild(inp); inp.select();
-                    document.execCommand("copy"); inp.remove();
-                    showToast("Ссылка скопирована!", "success", 2500);
-                } catch (_) {}
-            });
+        copyToClipboard(url,
+            () => showToast("Ссылка скопирована!", "success", 2500),
+            () => {}
+        );
     };
 }
 /* Обновляем <title> страницы: "Комната ABC123 — VisionCall" */
@@ -634,7 +628,6 @@ function ensureRemoteAudio(id, stream) {
 
     /* Случай 1: элемент есть и подключён к правильному живому потоку — ничего не делаем */
     if (existing && existing.srcObject === stream && trackState === "live") {
-        console.log(`[AUDIO] ensureRemoteAudio peer=${id} action=reused trackState=${trackState}`);
         return;
     }
 
@@ -644,9 +637,9 @@ function ensureRemoteAudio(id, stream) {
         existing.srcObject = null;
         existing.remove();
         delete peerAudioEls[id];
-        console.log(`[AUDIO] ensureRemoteAudio peer=${id} action=recreated trackState=${trackState}`);
+        console.log(`[AUDIO] peer=${id} recreated audio el (trackState=${trackState})`);
     } else {
-        console.log(`[AUDIO] ensureRemoteAudio peer=${id} action=created trackState=${trackState}`);
+        console.log(`[AUDIO] peer=${id} created audio el (trackState=${trackState})`);
     }
 
     /* Создаём новый <audio> элемент */
@@ -722,19 +715,6 @@ function updateWaitingBanner() {
 
     if (count <= 1) {
         if (!banner) {
-            /* ── Один раз внедряем CSS-анимацию ── */
-            if (!document.getElementById("vc-waiting-anim")) {
-                const s = document.createElement("style");
-                s.id = "vc-waiting-anim";
-                s.textContent = `
-                    @keyframes vcBannerIn {
-                        from { opacity:0; transform:translate(-50%,-50%) scale(0.92); }
-                        to   { opacity:1; transform:translate(-50%,-50%) scale(1); }
-                    }
-                `;
-                document.head.appendChild(s);
-            }
-
             banner = document.createElement("div");
             banner.id = "vc-waiting-banner";
             banner.innerHTML = `
@@ -789,25 +769,17 @@ function updateWaitingBanner() {
 
             /* Скопировать */
             const copyWaiting = document.getElementById("vc-waiting-copy");
+            const _wbIconHTML = copyWaiting.innerHTML;
             copyWaiting.onclick = () => {
                 const link = `${location.origin}/?room=${encodeURIComponent(room)}`;
-                navigator.clipboard?.writeText(link)
-                    .then(() => {
+                copyToClipboard(link,
+                    () => {
                         copyWaiting.textContent = "✓ Скопировано!";
                         showToast("Ссылка скопирована!", "success", 2500);
-                        setTimeout(() => {
-                            copyWaiting.innerHTML = `
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/>
-                                    <circle cx="18" cy="19" r="3"/>
-                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                                    <line x1="15.41" y1="6.51"  x2="8.59"  y2="10.49"/>
-                                </svg>
-                                Скопировать ссылку`;
-                        }, 2000);
-                    })
-                    .catch(() => showToast("Не удалось скопировать", "error", 3000));
+                        setTimeout(() => { copyWaiting.innerHTML = _wbIconHTML; }, 2000);
+                    },
+                    () => showToast("Не удалось скопировать", "error", 3000)
+                );
             };
         }
     } else if (banner) {
@@ -1010,6 +982,35 @@ videoGrid.addEventListener("click", e => {
 /* ════════════════════════════════════════════
    КОПИРОВАНИЕ ССЫЛКИ
 ════════════════════════════════════════════ */
+
+/* Вспомогательная функция: копирует текст в буфер через Clipboard API
+   с fallback на устаревший execCommand (для HTTP / старых браузеров).
+   onSuccess / onError — колбэки результата. */
+function copyToClipboard(text, onSuccess, onError) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+            _execCommandCopy(text, onSuccess, onError);
+        });
+    } else {
+        _execCommandCopy(text, onSuccess, onError);
+    }
+}
+function _execCommandCopy(text, onSuccess, onError) {
+    try {
+        const inp = document.createElement("input");
+        inp.value = text;
+        inp.style.position = "fixed";
+        inp.style.opacity  = "0";
+        document.body.appendChild(inp);
+        inp.select();
+        document.execCommand("copy");
+        inp.remove();
+        onSuccess();
+    } catch (_) {
+        onError?.();
+    }
+}
+
 if (copyBtn) {
     copyBtn.onclick = e => {
         e.stopPropagation();
@@ -1019,41 +1020,16 @@ if (copyBtn) {
             copyBtn.setAttribute("aria-label", "Поделиться ссылкой");
             copyBtn.classList.remove("copy-success");
         }, 2000);
-        const clipboardPromise = navigator.clipboard?.writeText(url);
-        if (clipboardPromise) {
-            clipboardPromise.then(() => {
+        copyToClipboard(url,
+            () => {
                 copyBtn.innerHTML = ICONS.copied;
                 copyBtn.setAttribute("aria-label", "Ссылка скопирована");
                 copyBtn.classList.add("copy-success");
                 showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
                 restore();
-            }).catch(() => {
-                try {
-                    const inp = document.createElement("input");
-                    inp.value = url; document.body.appendChild(inp); inp.select();
-                    document.execCommand("copy"); inp.remove();
-                    copyBtn.innerHTML = ICONS.copied;
-                    copyBtn.classList.add("copy-success");
-                    showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
-                    restore();
-                } catch (_) {
-                    showToast("Не удалось скопировать ссылку автоматически. Скопируйте адрес из строки браузера вручную.", "error");
-                }
-            });
-        } else {
-            /* clipboard API недоступен (HTTP) — используем execCommand */
-            try {
-                const inp = document.createElement("input");
-                inp.value = url; document.body.appendChild(inp); inp.select();
-                document.execCommand("copy"); inp.remove();
-                copyBtn.innerHTML = ICONS.copied;
-                copyBtn.classList.add("copy-success");
-                showToast("Ссылка скопирована! Отправьте её участникам — они смогут войти в конференцию по этой ссылке.", "success", 6000);
-                restore();
-            } catch (_) {
-                showToast("Не удалось скопировать ссылку автоматически. Скопируйте адрес из строки браузера вручную.", "error");
-            }
-        }
+            },
+            () => showToast("Не удалось скопировать ссылку автоматически. Скопируйте адрес из строки браузера вручную.", "error")
+        );
     };
 }
 
@@ -1368,9 +1344,7 @@ async function updateQualityIndicator(id, pc) {
 ════════════════════════════════════════════ */
 function createPeer(id) {
     if (peerConnections[id]) return peerConnections[id];
-    /* #diag — Логируем ICE-серверы при создании каждого PeerConnection.
-       В DevTools → Console можно увидеть есть ли TURN среди серверов. */
-    console.log(`[ICE servers] for peer ${id}:`, JSON.stringify(servers.iceServers));
+    console.log(`[ICE] createPeer id=${id}, servers=${servers.iceServers.length}`);
     const pc = new RTCPeerConnection(servers);
     makingOffer[id] = false;
 
@@ -1447,16 +1421,14 @@ function createPeer(id) {
 
     pc.onicecandidate = e => {
         if (e.candidate) {
-            /* #diag — Логируем тип кандидата:
-               host   = локальный IP (прямое соединение)
-               srflx  = STUN (публичный IP через NAT)
-               relay  = TURN (медиа идёт через ретранслятор)
-               Если relay не появляется — TURN не работает. */
-            const type = e.candidate.type || e.candidate.candidate?.match(/typ (\w+)/)?.[1] || "unknown";
-            console.log(`[ICE candidate] peer=${id} type=${type} protocol=${e.candidate.protocol || "?"}`);
             socket.emit("ice-candidate", { candidate: e.candidate, to: id });
         } else {
-            console.log(`[ICE candidate] peer=${id} gathering complete`);
+            /* Gathering complete — логируем итоговые типы кандидатов */
+            pc.getStats?.().then(stats => {
+                const types = new Set();
+                stats.forEach(r => { if (r.type === "local-candidate" && r.candidateType) types.add(r.candidateType); });
+                console.log(`[ICE] peer=${id} gathering done, candidate types: ${[...types].join(", ") || "none"}`);
+            }).catch(() => {});
         }
     };
 
@@ -1534,7 +1506,6 @@ function createPeer(id) {
                 }
                 badge.textContent = "⚠️ Нет связи";
                 badge.title = "Соединение не установлено. Возможно, требуется TURN-сервер для данной сети.";
-                badge.style.cssText = "position:absolute;top:8px;right:8px;background:rgba(239,68,68,0.9);color:#fff;font-size:11px;padding:3px 7px;border-radius:12px;z-index:5;pointer-events:none;";
             } else if (state === "connected" || state === "completed") {
                 badge?.remove();
             }

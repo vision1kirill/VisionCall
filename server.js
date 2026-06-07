@@ -11,34 +11,47 @@ const server = http.createServer(app);
 (function logTurnConfig() {
     const meteredKey    = process.env.METERED_API_KEY;
     const meteredDomain = process.env.METERED_DOMAIN;
+    const twilioSid     = process.env.TWILIO_ACCOUNT_SID;
+    const twilioToken   = process.env.TWILIO_AUTH_TOKEN;
     const turnUrl       = process.env.TURN_URL;
     const turnUser      = process.env.TURN_USERNAME;
     const turnCred      = process.env.TURN_CREDENTIAL;
 
     const hasMeter  = !!(meteredKey && meteredDomain);
+    const hasTwilio = !!(twilioSid && twilioToken);
     const hasStatic = !!(turnUrl && turnUser && turnCred);
+    const hasAny    = hasMeter || hasTwilio || hasStatic;
+
+    console.log("┌────────────────────────────────────────────────────┐");
+    console.log("│  [TURN] Provider configuration at startup           │");
 
     if (hasMeter) {
-        /* Маскируем ключ: первые 4 + последние 4 символа */
         const masked = meteredKey.length > 8
-            ? meteredKey.slice(0, 4) + "..." + meteredKey.slice(-4)
-            : "****";
-        console.log(`[TURN] Provider: metered, domain: ${meteredDomain}, api_key: ${masked}`);
+            ? meteredKey.slice(0, 4) + "..." + meteredKey.slice(-4) : "****";
+        console.log(`│  ✓ Metered:  domain=${meteredDomain}, key=${masked}`.padEnd(53) + "│");
     } else {
-        console.warn("┌─────────────────────────────────────────────────────┐");
-        console.warn("│  [TURN] NOT CONFIGURED — running on STUN only       │");
-        console.warn("│  Connections behind symmetric NAT will FAIL silently │");
-        console.warn("│  Set METERED_API_KEY + METERED_DOMAIN in Railway Env │");
-        console.warn("└─────────────────────────────────────────────────────┘");
+        console.log("│  ✗ Metered:  not configured (METERED_API_KEY missing) │");
+    }
+
+    if (hasTwilio) {
+        console.log(`│  ✓ Twilio:   SID=${twilioSid.slice(0, 8)}...`.padEnd(53) + "│");
+    } else {
+        console.log("│  ✗ Twilio:   not configured (TWILIO_ACCOUNT_SID miss.) │");
     }
 
     if (hasStatic) {
-        console.log(`[TURN] Static TURN also configured: ${turnUrl}`);
+        console.log(`│  ✓ Static:   ${turnUrl}`.slice(0, 52).padEnd(52) + " │");
+    } else {
+        console.log("│  ✗ Static:   not configured (TURN_URL missing)        │");
     }
 
-    if (!hasMeter && !hasStatic) {
-        console.warn("[TURN] No TURN provider at all — STUN-only mode.");
+    console.log("│  ✓ OpenRelay: always active (fallback)              │");
+
+    if (!hasAny) {
+        console.warn("│  ⚠ WARNING: No paid TURN — relay via OpenRelay only  │");
     }
+
+    console.log("└────────────────────────────────────────────────────┘");
 })();
 
 /* ── CORS — в проде задайте ALLOWED_ORIGIN в Railway Variables ── */
@@ -180,7 +193,41 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
     }
 }
 
+/* IP-based rate limit для /api/ice-servers: защита TURN-кредитов от перебора.
+   Ограничение: 20 запросов с одного IP за 60 секунд.
+   Кэш на 50 мин даёт один реальный запрос к TURN API, остальные — из кэша. */
+const _iceRateMap = new Map();
+const ICE_RATE_MAX = 20;
+const ICE_RATE_WIN = 60_000;
+
+function iceRateOk(ip) {
+    const now  = Date.now();
+    const prev = _iceRateMap.get(ip) || { count: 0, resetAt: now + ICE_RATE_WIN };
+    if (now > prev.resetAt) {
+        _iceRateMap.set(ip, { count: 1, resetAt: now + ICE_RATE_WIN });
+        return true;
+    }
+    prev.count++;
+    _iceRateMap.set(ip, prev);
+    return prev.count <= ICE_RATE_MAX;
+}
+
+/* Периодически чистим старые записи rate-limit чтобы не копить в памяти */
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, v] of _iceRateMap) {
+        if (now > v.resetAt) _iceRateMap.delete(ip);
+    }
+}, 5 * 60_000);
+
 app.get("/api/ice-servers", async (_req, res) => {
+    /* Rate limit по IP (через X-Forwarded-For от Railway proxy) */
+    const ip = _req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || _req.socket.remoteAddress || "unknown";
+    if (!iceRateOk(ip)) {
+        console.warn(`[TURN/rate-limit] ip=${ip} — too many requests`);
+        return res.status(429).json({ error: "Too many requests", retryAfter: 60 });
+    }
+
     /* Отдаём кэш если свежий */
     if (_iceCache && Date.now() - _iceCacheAt < ICE_CACHE_MS) {
         return res.json({ iceServers: _iceCache });

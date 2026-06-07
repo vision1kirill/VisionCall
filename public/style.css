@@ -1265,6 +1265,35 @@ video.flip-h { transform: scaleX(-1); }
 .vc-toast.vc-toast-success { border-color: rgba(34, 197, 94, 0.5); }
 .vc-toast.vc-toast-info   { border-color: rgba(99, 102, 241, 0.45); }
 
+/* ═══════════════════════════════════════
+   БЕЙДЖ РАЗРЫВА СОЕДИНЕНИЯ (⚠️ Нет связи)
+   Ранее задавался через style.cssText в JS —
+   перенесён в CSS для поддержки тем и удобства правки.
+═══════════════════════════════════════ */
+.vc-conn-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(239, 68, 68, 0.9);
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 7px;
+    border-radius: 12px;
+    z-index: 5;
+    pointer-events: none;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════
+   АНИМАЦИЯ БАННЕРА "ЖДЁМ УЧАСТНИКОВ"
+   Ранее инжектировалась через createElement("style") в JS.
+═══════════════════════════════════════ */
+@keyframes vcBannerIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 /* Toast на лобби-странице — ниже из-за отсутствия controls-bar */
 body.lobby-page .vc-toast,
 body.home .vc-toast {

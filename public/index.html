@@ -212,7 +212,7 @@ function renderFlipCounter(el, newVal) {
 
 function pollOnline() {
     fetch("/api/online")
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(data => {
             const count = typeof data.online === "number" ? data.online : 0;
             if (count !== lastOnline) {
