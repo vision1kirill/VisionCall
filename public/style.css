@@ -1799,6 +1799,41 @@ button, .join-btn, .lobby-ctrl-btn, .lobby-join-btn {
 }
 
 /* ═══════════════════════════════════════
+   THEME TRANSITION — плавная смена темы
+   Класс html.theme-transition добавляется JS на 400 мс
+   при каждом ручном переключении темы.
+   На первичной загрузке класс не добавляется → нет flash.
+═══════════════════════════════════════ */
+html.theme-transition body,
+html.theme-transition .topbar,
+html.theme-transition .controls,
+html.theme-transition .controls button,
+html.theme-transition .sidebar,
+html.theme-transition .chat-messages,
+html.theme-transition .chat-input,
+html.theme-transition .chat-input input,
+html.theme-transition .video-box,
+html.theme-transition .video-grid,
+html.theme-transition .join-card,
+html.theme-transition .lobby-card,
+html.theme-transition input,
+html.theme-transition .message,
+html.theme-transition .message .msg-author,
+html.theme-transition .message .msg-text,
+html.theme-transition #vc-waiting-banner,
+html.theme-transition #themeSwitcher,
+html.theme-transition .theme-btn,
+html.theme-transition .lobby-join-btn,
+html.theme-transition .join-btn {
+    transition:
+        background-color 0.35s ease,
+        background     0.35s ease,
+        color          0.35s ease,
+        border-color   0.35s ease,
+        box-shadow     0.35s ease !important;
+}
+
+/* ═══════════════════════════════════════
    THEME SWITCHER PILL
 ═══════════════════════════════════════ */
 #themeSwitcher {

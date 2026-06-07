@@ -14,8 +14,18 @@
   try { current = localStorage.getItem(STORAGE_KEY); } catch (_) {}
   if (!THEMES.includes(current)) current = "dark";
 
-  /* ── Apply theme immediately (before paint) ── */
-  function applyTheme(theme) {
+  /* ── Apply theme ──
+     skipTransition=true → мгновенно (при загрузке страницы, без flash)
+     skipTransition=false → с плавным CSS-переходом (при клике пользователя) */
+  function applyTheme(theme, skipTransition) {
+    if (!skipTransition) {
+      /* Включаем transitions на 400 мс */
+      const html = document.documentElement;
+      html.classList.add("theme-transition");
+      clearTimeout(html._themeTransTimer);
+      html._themeTransTimer = setTimeout(() => html.classList.remove("theme-transition"), 400);
+    }
+
     document.documentElement.setAttribute("data-theme", theme);
     /* Update theme-color meta tag */
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -28,8 +38,8 @@
     });
   }
 
-  /* Apply immediately so there's no flash */
-  applyTheme(current);
+  /* Apply immediately so there's no flash — без анимации */
+  applyTheme(current, true);
 
   /* ── Build the theme switcher pill ── */
   function buildSwitcher() {
