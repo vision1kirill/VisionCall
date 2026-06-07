@@ -14,28 +14,44 @@
   try { current = localStorage.getItem(STORAGE_KEY); } catch (_) {}
   if (!THEMES.includes(current)) current = "dark";
 
-  /* ── Apply theme ──
-     skipTransition=true → мгновенно (при загрузке страницы, без flash)
-     skipTransition=false → с плавным CSS-переходом (при клике пользователя) */
-  function applyTheme(theme, skipTransition) {
-    if (!skipTransition) {
-      /* Включаем transitions на 400 мс */
-      const html = document.documentElement;
-      html.classList.add("theme-transition");
-      clearTimeout(html._themeTransTimer);
-      html._themeTransTimer = setTimeout(() => html.classList.remove("theme-transition"), 400);
-    }
-
+  /* ── Ядро: применить тему (без анимации) ── */
+  function commitTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    /* Update theme-color meta tag */
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", META_COLORS[theme] ?? META_COLORS.dark);
     current = theme;
     try { localStorage.setItem(STORAGE_KEY, theme); } catch (_) {}
-    /* Sync all switcher buttons if they exist */
     document.querySelectorAll(".theme-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.theme === theme);
     });
+  }
+
+  /* ── Apply theme ──
+     skipTransition=true → мгновенно (при загрузке страницы, без flash).
+     skipTransition=false → анимированный переход:
+       - View Transition API (Chrome/Edge/Safari) → кросс-фейд снапшотов
+       - Fallback (Firefox и др.)               → opacity blink          */
+  function applyTheme(theme, skipTransition) {
+    if (skipTransition) {
+      commitTheme(theme);
+      return;
+    }
+
+    /* ── View Transition API (предпочтительно) ── */
+    if (document.startViewTransition) {
+      document.startViewTransition(() => commitTheme(theme));
+      return;
+    }
+
+    /* ── Opacity-fade fallback ── */
+    const html = document.documentElement;
+    html.style.transition = "opacity 0.15s ease";
+    html.style.opacity    = "0";
+    setTimeout(() => {
+      commitTheme(theme);
+      html.style.opacity = "1";
+      setTimeout(() => { html.style.transition = ""; }, 200);
+    }, 150);
   }
 
   /* Apply immediately so there's no flash — без анимации */
