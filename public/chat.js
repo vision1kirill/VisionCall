@@ -10,13 +10,16 @@ if (!msgInput || !sendBtn || !messages) {
 let unreadCount = 0;
 /* #37 — chatIsOpen удалён: переменная никогда не обновлялась (dead code) */
 
+/* P13: Кэшируем ссылку на сайдбар один раз — querySelector на каждое входящее
+   сообщение избыточен, особенно при активном чате. */
+const _sidebarEl = document.querySelector(".sidebar");
+
 /* Проверяем, открыт ли сайдбар */
 function isChatVisible() {
-    const sb = document.querySelector(".sidebar");
-    if (!sb) return true;
+    if (!_sidebarEl) return true;
     /* На мобиле — нужен класс mobile-open */
     const isMobile = window.innerWidth <= 900;
-    return isMobile ? sb.classList.contains("mobile-open") : true;
+    return isMobile ? _sidebarEl.classList.contains("mobile-open") : true;
 }
 
 if (sendBtn) sendBtn.onclick = sendMessage;
@@ -49,6 +52,13 @@ socket.on("chat-message", data => {
         unreadCount++;
         updateUnreadBadge();
     }
+});
+
+/* Q14: Сбрасываем счётчик непрочитанных при переподключении сокета.
+   Иначе старый бейдж остаётся и вводит в заблуждение после разрыва. */
+socket.on("connect", () => {
+    unreadCount = 0;
+    updateUnreadBadge();
 });
 
 const MAX_CHAT_MESSAGES = 200; /* Ограничиваем DOM: предотвращаем утечку памяти */
@@ -98,13 +108,13 @@ function updateUnreadBadge() {
     }
 }
 
-/* Сбрасываем бейдж при открытии чата */
+/* Q13: Используем addEventListener вместо перезаписи chatBtnEl.onclick.
+   Перезапись onclick обрывает любой предыдущий обработчик, заданный другим модулем.
+   addEventListener правильно компонует несколько слушателей. */
 const chatBtnEl = document.getElementById("chatBtn");
 if (chatBtnEl) {
-    const orig = chatBtnEl.onclick;
-    chatBtnEl.onclick = function (e) {
-        if (orig) orig.call(this, e);
+    chatBtnEl.addEventListener("click", () => {
         unreadCount = 0;
         updateUnreadBadge();
-    };
+    });
 }

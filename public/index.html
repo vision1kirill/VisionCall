@@ -229,7 +229,10 @@ function joinViaLink() {
 
 /* ── Перейти в лобби ── */
 function goToLobby(room, name) {
-    window.location = `/lobby.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
+    /* S13: Обрезаем имя до 64 символов на JS-уровне — независимо от maxlength атрибута.
+       HTML maxlength легко обходится через DevTools или прямым запросом. */
+    const safeName = String(name).slice(0, 64);
+    window.location = `/lobby.html?room=${encodeURIComponent(room)}&name=${encodeURIComponent(safeName)}`;
 }
 
 /* ── Онлайн-счётчик с flip-анимацией ── */

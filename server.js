@@ -54,6 +54,16 @@ const server = http.createServer(app);
     console.log("└────────────────────────────────────────────────────┘");
 })();
 
+/* S1: Предупреждение при запуске если ALLOWED_ORIGIN не задан в проде.
+   Wildcard CORS ("*") позволяет любому сайту делать запросы к API —
+   в продакшне это нежелательно. */
+if (!process.env.ALLOWED_ORIGIN && process.env.NODE_ENV !== "development") {
+    console.warn(
+        "[SECURITY] ALLOWED_ORIGIN не задан — CORS разрешает любой origin (*).\n" +
+        "           В проде задайте ALLOWED_ORIGIN=https://visioncall.ru в Railway Variables."
+    );
+}
+
 /* ── CORS — в проде задайте ALLOWED_ORIGIN в Railway Variables ── */
 const io = new Server(server, {
     cors: {
@@ -457,8 +467,13 @@ io.on("connection", socket => {
         /* #68 — Защита от prototype pollution: data должен быть объектом */
         if (!data || typeof data !== "object") return;
         const room      = sanitizeRoom(data.room);
-        /* #68b — Фильтруем управляющие символы из имени и аватара */
-        const name      = String(data.name || "Участник").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 64) || "Участник";
+        /* #68b — Фильтруем управляющие символы + Unicode bidi-override из имени.
+           Bidi-override (‪-‮, ⁦-⁩) позволяют перевернуть текст
+           так, что "admin" выглядит как "nimda" — классическая техника спуфинга имён. */
+        const name      = String(data.name || "Участник")
+            .replace(/[\x00-\x1f\x7f]/g, "")
+            .replace(/[‪-‮⁦-⁩]/g, "")
+            .slice(0, 64) || "Участник";
         const avatar    = "default"; /* единый силуэт, выбор аватара отключён */
         const sessionId = String(data.sessionId || "").replace(/[^\w]/g, "").slice(0, 64);
 

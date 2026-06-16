@@ -237,6 +237,24 @@ async function startSelfMonitorRecording(seconds = 5, playbackCtx = null) {
     }, 1000);
 }
 
+/* P10: Кэш размеров canvas — обновляется ResizeObserver, не каждым кадром.
+   Безопасные дефолты: 280×56 — типичный размер до первой отрисовки. */
+const _waveformCachedRect = { width: 280, height: 56 };
+if (micWaveformCanvas && typeof ResizeObserver !== "undefined") {
+    const _waveformRO = new ResizeObserver(entries => {
+        for (const entry of entries) {
+            const r = entry.contentRect;
+            if (r.width  > 0) _waveformCachedRect.width  = r.width;
+            if (r.height > 0) _waveformCachedRect.height = r.height;
+        }
+    });
+    _waveformRO.observe(micWaveformCanvas);
+    /* Инициализируем немедленно чтобы избежать мигания в первые кадры */
+    const _initRect = micWaveformCanvas.getBoundingClientRect();
+    if (_initRect.width  > 0) _waveformCachedRect.width  = _initRect.width;
+    if (_initRect.height > 0) _waveformCachedRect.height = _initRect.height;
+}
+
 function startMeter(stream) {
     try {
         if (meterAnimId) { cancelAnimationFrame(meterAnimId); meterAnimId = null; }
@@ -266,14 +284,12 @@ function startMeter(stream) {
 
             /* ── Осциллограмма ── */
             if (ctx2d && micWaveformCanvas) {
-                /* Синхронизируем размер canvas с реальными CSS-пикселями каждый кадр.
-                   getBoundingClientRect() точнее clientWidth на iOS (учитывает дробные пиксели).
-                   Fallback 280 (а не 300) — canvas НЕ position:absolute, поэтому даже если
-                   layout ещё не случился, 280 безопаснее чем 300 (меньше вероятность overflow). */
+                /* P10: Используем кэшированные размеры из ResizeObserver вместо
+                   getBoundingClientRect() в каждом кадре (= 60 форс-реофлоу/сек → 0).
+                   ResizeObserver обновляет кэш только при реальном изменении размера. */
                 const dpr  = window.devicePixelRatio || 1;
-                const rect = micWaveformCanvas.getBoundingClientRect();
-                const cW   = Math.round(rect.width  || micWaveformCanvas.offsetWidth  || 280);
-                const cH   = Math.round(rect.height || micWaveformCanvas.offsetHeight || 56);
+                const cW   = _waveformCachedRect.width;
+                const cH   = _waveformCachedRect.height;
                 const physW = Math.round(cW * dpr);
                 const physH = Math.round(cH * dpr);
                 if (micWaveformCanvas.width !== physW || micWaveformCanvas.height !== physH) {
@@ -519,9 +535,21 @@ if (noiseBtn) noiseBtn.onclick = async () => {
     await restartMicWithNoise();
 };
 
+/* P11: При выходе со страницы (bfcache, навигация) останавливаем само-прослушивание,
+   чтобы не оставлять активный AudioContext или MediaRecorder в фоне. */
+window.addEventListener("pagehide", () => { disableSelfMonitor(); }, { once: true });
+
+/* P12: Флаг защиты от двойного нажатия кнопки «Проверить динамик».
+   Без него каждый клик создаёт новый AudioContext с несколькими одновременными тонами. */
+let _speakerTestBusy = false;
+
 /* ── Кнопка проверки динамика ── */
 if (speakerTestBtn) speakerTestBtn.onclick = () => {
+    if (_speakerTestBusy) return;   /* P12: игнорируем пока звук ещё играет */
+    _speakerTestBusy = true;
     playSpeakerTest();
+    /* Звук длится ~2.5 сек — разблокируем кнопку после */
+    setTimeout(() => { _speakerTestBusy = false; }, 2600);
     if (speakerTestHint) {
         speakerTestHint.textContent = "🔔 Вы слышите колокольчики?";
         speakerTestHint.style.color = "#a5b4fc";

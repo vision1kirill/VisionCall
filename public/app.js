@@ -17,6 +17,13 @@ if (!room) {
     window.location.replace("/");
     throw new Error("redirect");
 }
+/* S9: Формат кода комнаты — ровно 6 символов из безопасного алфавита.
+   Проверяем на клиенте до подключения к сокету, чтобы не слать мусор серверу. */
+const _ROOM_CODE_RE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
+if (!_ROOM_CODE_RE.test(room)) {
+    window.location.replace("/");
+    throw new Error("redirect");
+}
 /* Без имени → на главную */
 if (!name || name === "null") {
     window.location.replace(room ? `/?room=${encodeURIComponent(room)}` : "/");
@@ -71,7 +78,11 @@ const VC_SESSION_KEY = "vc_session_id";
 let vcSessionId;
 try { vcSessionId = localStorage.getItem(VC_SESSION_KEY); } catch (_) {}
 if (!vcSessionId) {
-    vcSessionId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    /* Q8: crypto.randomUUID() криптографически стоек в отличие от Math.random().
+       Fallback на Math.random() для очень старых браузеров (IE11, Safari < 15.4). */
+    vcSessionId = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
     try { localStorage.setItem(VC_SESSION_KEY, vcSessionId); } catch (_) {}
 }
 
@@ -311,7 +322,10 @@ document.addEventListener("visibilitychange", () => {
 });
 /* Проверяем каждые 30 сек — на случай, если вкладка оставалась видимой,
    но браузер всё равно заморозил контекст (Chrome, Safari). */
-setInterval(ensureAudioCtxRunning, 30_000);
+/* P6: сохраняем ID чтобы очистить интервал при выходе — иначе он продолжает
+   тикать в bfcache и может разбудить приостановленный AudioContext. */
+const _audioCtxIntervalId = setInterval(ensureAudioCtxRunning, 30_000);
+window.addEventListener("pagehide", () => clearInterval(_audioCtxIntervalId), { once: true });
 
 /* Применяем усиление микрофона из лобби. */
 function buildGainedStream(rawStream, gain) {

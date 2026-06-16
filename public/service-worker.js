@@ -17,13 +17,20 @@ const PRECACHE_URLS = [
   "/manifest.json"
 ];
 
-/* ── Install: pre-cache icons/manifest, skip waiting immediately ── */
+/* ── Install: pre-cache icons/manifest ── */
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
   );
-  /* Take over immediately — don't wait for old tabs to close */
-  self.skipWaiting();
+  /* S19: НЕ вызываем skipWaiting() здесь — он немедленно активировал бы
+     новый SW на всех открытых вкладках, в том числе прямо во время звонка.
+     Вместо этого ждём, пока все вкладки со старым SW будут закрыты.
+     Для ручного обновления (вне звонка) страница сама пошлёт сообщение SW_SKIP_WAITING. */
+});
+
+/* ── Skip waiting по явному запросу от страницы ── */
+self.addEventListener("message", event => {
+  if (event.data?.type === "SW_SKIP_WAITING") self.skipWaiting();
 });
 
 /* ── Activate: purge ALL old caches, take control of all clients ── */
@@ -66,7 +73,8 @@ self.addEventListener("fetch", event => {
           /* Update cache with the fresh response */
           if (res && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(request, clone));
+            /* Q15: .catch() предотвращает unhandled-rejection если кэш недоступен */
+            caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {});
           }
           return res;
         })
@@ -80,8 +88,12 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       fetch(request)
         .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(request, clone));
+          /* Q16: не кэшируем редиректы — они могут указывать на другой origin
+             или быть временными; кэшировать их непредсказуемо и опасно */
+          if (res && res.status === 200 && !res.redirected) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {});
+          }
           return res;
         })
         .catch(() => caches.match(request))
