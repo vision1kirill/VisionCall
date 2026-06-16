@@ -136,13 +136,6 @@ if (preRoom) {
 }
 
 /* ── Вспомогательные функции ── */
-function generateCode() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let code = "";
-    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-    return code;
-}
-
 function getNickname(inputId) {
     const input = document.getElementById(inputId);
     if (!input) return null;   /* null guard: элемент может отсутствовать */
@@ -161,13 +154,32 @@ function getNickname(inputId) {
 }
 
 /* ── Создать комнату ── */
-function createRoom() {
+async function createRoom() {
     const name = getNickname("nickname");
     if (!name) return;
-    /* #79 — try-catch: localStorage.setItem бросает исключение в Private Mode */
     try { localStorage.setItem(NICK_KEY, name); } catch (_) {}
-    const room = generateCode();
-    goToLobby(room, name);
+
+    /* Блокируем кнопку пока сервер генерирует код */
+    const btn = document.querySelector(".create-btn");
+    if (btn) { btn.disabled = true; btn.style.opacity = "0.6"; }
+
+    try {
+        const resp = await fetch("/api/create-room", { method: "POST" });
+        if (!resp.ok) throw new Error(resp.status);
+        const { room } = await resp.json();
+        goToLobby(room, name);
+    } catch (_) {
+        if (btn) { btn.disabled = false; btn.style.opacity = ""; }
+        let errEl = document.getElementById("createRoomErr");
+        if (!errEl) {
+            errEl = document.createElement("p");
+            errEl.id = "createRoomErr";
+            errEl.style.cssText = "color:#f87171;font-size:13px;margin-top:8px;text-align:center";
+            btn?.parentNode?.appendChild(errEl);
+        }
+        errEl.textContent = "Не удалось создать комнату. Попробуйте ещё раз.";
+        setTimeout(() => errEl?.remove(), 5000);
+    }
 }
 
 /* ── Войти по ссылке (карточка link-join) ── */

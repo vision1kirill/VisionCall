@@ -341,6 +341,55 @@ app.get("/api/ice-servers", async (_req, res) => {
 });
 
 /* ════════════════════════════════════════════
+   СОЗДАНИЕ КОМНАТ — только через API
+   Защита от «угадывания» кода: комнату можно создать только через
+   POST /api/create-room. Случайный URL /?room=ABCDEF заблокируется.
+════════════════════════════════════════════ */
+
+/* Коды, выданные сервером и ещё не использованные (ожидают первого join) */
+const pendingRooms    = new Map(); /* roomCode → createdAt (ms) */
+const PENDING_TTL_MS  = 30 * 60 * 1000; /* 30 минут — потом вычищаем */
+
+/* Rate limit для create-room — макс 5 создания в 5 минут с одного IP */
+const _createRateMap  = new Map();
+const CREATE_RATE_MAX = 5;
+const CREATE_RATE_WIN = 5 * 60_000;
+function createRateOk(ip) {
+    const now  = Date.now();
+    const prev = _createRateMap.get(ip) || { count: 0, resetAt: now + CREATE_RATE_WIN };
+    if (now > prev.resetAt) {
+        _createRateMap.set(ip, { count: 1, resetAt: now + CREATE_RATE_WIN });
+        return true;
+    }
+    prev.count++;
+    _createRateMap.set(ip, prev);
+    return prev.count <= CREATE_RATE_MAX;
+}
+
+/* Очистка устаревших pending-комнат и rate-limit записей */
+setInterval(() => {
+    const now = Date.now();
+    for (const [code, createdAt] of pendingRooms)
+        if (now - createdAt > PENDING_TTL_MS) pendingRooms.delete(code);
+    for (const [ip, v] of _createRateMap)
+        if (now > v.resetAt) _createRateMap.delete(ip);
+}, 5 * 60_000);
+
+app.post("/api/create-room", (req, res) => {
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+    if (!createRateOk(ip)) {
+        return res.status(429).json({ error: "Слишком много запросов. Подождите немного." });
+    }
+    /* Генерируем код — те же символы что на клиенте, исключая путаницу О/0/I/1 */
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    pendingRooms.set(code, Date.now());
+    console.log(`[create-room] code=${code} ip=${ip}`);
+    res.json({ room: code });
+});
+
+/* ════════════════════════════════════════════
    ХРАНИЛИЩЕ КОМНАТ
    Map вместо plain-object → нет prototype-pollution
 ════════════════════════════════════════════ */
@@ -404,6 +453,19 @@ io.on("connection", socket => {
         const sessionId = String(data.sessionId || "").replace(/[^\w]/g, "").slice(0, 64);
 
         if (!room) { socket.emit("room-error", "Неверный код комнаты"); return; }
+
+        /* ── Проверяем что комната либо уже активна, либо создана через API ──
+           Это блокирует попытку создать комнату по случайному URL:
+           join-room проходит только если код есть в rooms (активная комната
+           с участниками) или в pendingRooms (только что выдан через /api/create-room). */
+        const roomIsActive  = rooms.has(room);
+        const roomIsPending = pendingRooms.has(room);
+        if (!roomIsActive && !roomIsPending) {
+            socket.emit("room-error", "Комната не найдена. Создайте новую комнату на главной странице.");
+            return;
+        }
+        /* Убираем из pending — с этого момента комната становится активной */
+        if (roomIsPending) pendingRooms.delete(room);
 
         /* ── Выгоняем старый "призрак" того же пользователя ──
            Если sessionId уже есть в комнате (другой socketId) — это
