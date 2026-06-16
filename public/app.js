@@ -972,10 +972,19 @@ function collapseAll() {
 backdrop.addEventListener("click", collapseAll);
 document.addEventListener("keydown", e => { if (e.key === "Escape") collapseAll(); });
 videoGrid.addEventListener("click", e => {
-    /* Не разворачиваем если клик пришёл из панели звука экрана */
+    /* Не реагируем на клики из панели звука экрана */
     if (e.target.closest(".screen-audio-panel")) return;
     const box = e.target.closest(".video-box");
     if (!box) return;
+
+    /* В spotlight-режиме клик по миниатюре перемещает её в главную область.
+       Клик по самому главному боксу (vc-spotlight-main) — снимает закреп. */
+    if (pinnedId) {
+        const id = box.id.replace("box-", "");
+        togglePin(id);
+        return;
+    }
+
     box.classList.contains("expanded") ? collapseAll() : expandBox(box);
 });
 
@@ -1912,6 +1921,9 @@ socket.on("screen-share-state", data => {
 
         const sharerName = peerMeta[data.from]?.name || "Участник";
         showToast(`🖥 ${sharerName} начал демонстрацию экрана`, "info", 4000);
+        /* Auto-spotlight: автоматически фокусируемся на демонстрации экрана,
+           если сейчас никто не закреплён вручную. */
+        if (!pinnedId) setSpotlight(data.from);
         /* Показываем слайдер громкости звука экрана для зрителей.
            Аудио доставляется через тот же аудио-сендер (replaceTrack/WebAudio-микс),
            поэтому управляем громкостью через volume на video / audio элементе. */
@@ -1941,6 +1953,8 @@ socket.on("screen-share-state", data => {
         }
     } else {
         screenSharingPeers.delete(data.from);
+        /* Auto-spotlight: если демонстрация была закреплена автоматически — снимаем. */
+        if (pinnedId === data.from) clearSpotlight();
         /* Убираем слайдер громкости и любые устаревшие элементы screen audio */
         box.querySelector(".remote-screen-audio-panel")?.remove(); /* Bug fix: был неверный класс .rsa-viewer-panel */
         removeRemoteScreenAudio(data.from);

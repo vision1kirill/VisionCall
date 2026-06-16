@@ -1977,58 +1977,84 @@ html.theme-transition {
 .video-grid.spotlight-mode {
     display: flex !important;
     flex-direction: column !important;
-    gap: 8px !important;
-    padding: 10px !important;
-    /* В spotlight-режиме отключаем скролл — flex layout сам распределяет высоту.
-       overflow-y:auto (из базового правила .video-grid) создаёт скроллбар
-       и может обрезать thumbnail-row. overflow:hidden решает это. */
+    gap: 0 !important;
+    padding: 10px 10px 10px !important;
+    /* overflow:hidden — prevents the base overflow-y:auto from adding a scrollbar
+       that would shrink the grid and misalign the thumbnail row */
     overflow: hidden !important;
-    /* Reset inline grid styles */
+    /* Reset inline grid styles set by updateGridLayout() */
     grid-template-columns: unset !important;
     grid-auto-rows: unset !important;
 }
 
+/* Main (pinned) video — fills all available height */
 .video-box.vc-spotlight-main {
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 0;      /* grow to fill; 0 basis avoids content-size floor */
+    min-height: 0;    /* allow flex item to shrink below content */
+    overflow: hidden;
     width: 100% !important;
-    height: auto !important;
+    /* subtle indigo ring — signals "this is pinned" like Discord's blue border */
+    border-color: rgba(99, 102, 241, 0.55) !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22), 0 6px 28px rgba(0,0,0,0.45) !important;
+    border-radius: 14px;
+    transition: none !important; /* skip transition when entering spotlight */
 }
 
+/* Horizontal thumbnail strip */
 .vc-thumbnail-row {
     display: flex;
     flex-direction: row;
+    align-items: center;
     gap: 8px;
-    height: 150px;
-    min-height: 150px;
+    height: 118px;     /* thumbnails are 106px + 12px top breathing room */
+    min-height: 118px;
     flex-shrink: 0;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.15) transparent;
-    padding-bottom: 2px;
+    /* Top line gives clean visual separation between main area and strip */
+    border-top: 1px solid rgba(255,255,255,0.07);
+    margin-top: 8px;
+    padding: 8px 0 4px;
 }
 .vc-thumbnail-row::-webkit-scrollbar { height: 3px; }
 .vc-thumbnail-row::-webkit-scrollbar-track { background: transparent; }
 .vc-thumbnail-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 
+/* Each thumbnail — dimmed, brightens on hover/speaking */
 .vc-thumbnail-row .video-box {
-    width: 200px !important;
-    min-width: 180px !important;
-    /* min-height override — the base .video-box rule sets 160px which breaks thumbnail layout */
+    /* 16:9 ratio at 106px height → 188px wide */
+    width: 188px !important;
+    min-width: 148px !important;
+    /* min-height override: base .video-box has min-height:160px which breaks strip */
     min-height: 0 !important;
-    height: 150px !important;
+    height: 106px !important;
     flex-shrink: 0;
     cursor: pointer;
-    border-radius: 12px;
+    border-radius: 10px;
+    opacity: 0.72;
+    transition: opacity 0.18s ease, border-color 0.18s ease, transform 0.14s ease;
+}
+.vc-thumbnail-row .video-box:hover {
+    opacity: 1 !important;
+    border-color: rgba(255,255,255,0.45) !important;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+}
+.vc-thumbnail-row .video-box.speaking {
+    opacity: 1;
+    /* speaking ring still works — it overrides the opacity dimming */
 }
 .vc-thumbnail-row .video-box .name-label {
-    font-size: 11px;
-    padding: 3px 7px;
-    bottom: 6px;
-    left: 6px;
-    max-width: calc(100% - 12px);
+    font-size: 10px;
+    padding: 2px 6px;
+    bottom: 4px;
+    left: 4px;
+    max-width: calc(100% - 8px);
 }
+/* Keep thumbnails uncluttered — PiP belongs in the main view */
+.vc-thumbnail-row .vc-pip-btn { display: none !important; }
 
 /* ═══════════════════════════════════════
    RESPONSIVE — TABLET (768px and below)
@@ -2044,11 +2070,11 @@ html.theme-transition {
     }
     .video-grid { gap: 8px; padding: 8px; }
     .vc-thumbnail-row .video-box {
-        width: 160px !important;
-        min-width: 140px !important;
-        height: 120px !important;
+        width: 152px !important;
+        min-width: 130px !important;
+        height: 90px !important;
     }
-    .vc-thumbnail-row { height: 120px; min-height: 120px; }
+    .vc-thumbnail-row { height: 106px; min-height: 106px; }
 }
 
 /* ═══════════════════════════════════════
@@ -2096,13 +2122,14 @@ html.theme-transition {
 
     /* Spotlight thumbnails */
     .vc-thumbnail-row {
-        height: 110px;
-        min-height: 110px;
+        height: 96px;
+        min-height: 96px;
+        padding: 6px 0 4px;
     }
     .vc-thumbnail-row .video-box {
-        width: 140px !important;
-        min-width: 120px !important;
-        height: 110px !important;
+        width: 128px !important;
+        min-width: 108px !important;
+        height: 80px !important;
     }
 }
 
@@ -2129,11 +2156,11 @@ html.theme-transition {
     .controls button svg { width: 17px; height: 17px; }
     .video-grid { padding: 4px; gap: 4px; }
     .video-box { min-height: 100px; }
-    .vc-thumbnail-row { height: 95px; min-height: 95px; }
+    .vc-thumbnail-row { height: 88px; min-height: 88px; padding: 4px 0 2px; }
     .vc-thumbnail-row .video-box {
-        width: 130px !important;
-        min-width: 110px !important;
-        height: 95px !important;
+        width: 116px !important;
+        min-width: 96px !important;
+        height: 72px !important;
     }
 }
 
