@@ -2057,6 +2057,39 @@ html.theme-transition {
 .vc-thumbnail-row .vc-pip-btn { display: none !important; }
 
 /* ═══════════════════════════════════════
+   SPOTLIGHT MAXIMIZE MODE
+   Second click on the main spotlight video expands it to fill .main
+   — topbar and controls remain visible, sidebar + thumbnail strip hide.
+   Triggered by .vc-spotlight-max on video-grid and .vc-main-max on .main.
+═══════════════════════════════════════ */
+.video-grid.spotlight-mode.vc-spotlight-max {
+    padding: 0 !important;
+    gap: 0 !important;
+}
+.video-grid.spotlight-mode.vc-spotlight-max .vc-thumbnail-row {
+    display: none !important;
+}
+.video-grid.spotlight-mode.vc-spotlight-max .video-box.vc-spotlight-main {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+.main.vc-main-max .sidebar {
+    display: none;
+}
+/* Hint cursor on the maximized video tells the user it's clickable to restore */
+.video-grid.spotlight-mode.vc-spotlight-max .video-box.vc-spotlight-main {
+    cursor: zoom-out;
+}
+
+/* Larger avatar in spotlight main — 80px avatar looks tiny in a big dark box */
+.video-box.vc-spotlight-main .avatar {
+    width: 120px;
+    height: 120px;
+    font-size: 56px;
+}
+
+/* ═══════════════════════════════════════
    RESPONSIVE — TABLET (768px and below)
 ═══════════════════════════════════════ */
 @media (max-width: 768px) {

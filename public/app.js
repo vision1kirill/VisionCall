@@ -96,6 +96,7 @@ document.title = `Комната ${room} — VisionCall`;
 
 const videoGrid       = document.getElementById("videoGrid");
 const participantsDiv = document.getElementById("participants");
+const mainEl          = document.querySelector(".main");
 
 const micBtn    = document.getElementById("micBtn");
 const camBtn    = document.getElementById("camBtn");
@@ -162,7 +163,8 @@ let _joined = false;
 let _reconnecting = false;
 
 /* ── Закреплённый участник (spotlight-режим) ── */
-let pinnedId = null;
+let pinnedId       = null;
+let isSpotlightMax = false; /* true → видео занимает весь .main (без боковой панели и полоски) */
 
 /* ── Отслеживаем кто из удалённых участников сейчас шарит экран ── */
 const screenSharingPeers = new Set();
@@ -897,6 +899,9 @@ function setSpotlight(id) {
 
 function clearSpotlight() {
     if (!pinnedId) return;
+    /* Выходим из максимизации если была активна */
+    unmaximizeSpotlight();
+
     const thumbRow = document.getElementById("vc-thumb-row");
 
     /* Возвращаем боксы из полосы миниатюр обратно в сетку */
@@ -915,6 +920,21 @@ function clearSpotlight() {
     videoGrid.classList.remove("spotlight-mode");
     _updatePinButtons();
     updateGridLayout();
+}
+
+/* ── Максимизация: видео занимает весь .main, скрываем полоску и сайдбар ── */
+function maximizeSpotlight() {
+    if (!pinnedId) return;
+    isSpotlightMax = true;
+    videoGrid.classList.add("vc-spotlight-max");
+    mainEl?.classList.add("vc-main-max");
+}
+
+function unmaximizeSpotlight() {
+    if (!isSpotlightMax) return;
+    isSpotlightMax = false;
+    videoGrid.classList.remove("vc-spotlight-max");
+    mainEl?.classList.remove("vc-main-max");
 }
 
 function _updatePinButtons() {
@@ -970,22 +990,35 @@ function collapseAll() {
     backdrop.classList.remove("active");
 }
 backdrop.addEventListener("click", collapseAll);
-document.addEventListener("keydown", e => { if (e.key === "Escape") collapseAll(); });
+document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    /* Приоритет: fullscreen expanded → maximize → spotlight → ничего */
+    if (document.querySelector(".video-box.expanded")) { collapseAll(); return; }
+    if (isSpotlightMax) { unmaximizeSpotlight(); return; }
+    if (pinnedId)       { clearSpotlight();       return; }
+});
 videoGrid.addEventListener("click", e => {
     /* Не реагируем на клики из панели звука экрана */
     if (e.target.closest(".screen-audio-panel")) return;
     const box = e.target.closest(".video-box");
     if (!box) return;
 
-    /* В spotlight-режиме клик по миниатюре перемещает её в главную область.
-       Клик по самому главному боксу (vc-spotlight-main) — снимает закреп. */
+    const id = box.id.replace("box-", "");
+
     if (pinnedId) {
-        const id = box.id.replace("box-", "");
-        togglePin(id);
+        if (id === pinnedId) {
+            /* Клик по главному spotlight-видео: переключает максимизацию */
+            isSpotlightMax ? unmaximizeSpotlight() : maximizeSpotlight();
+        } else {
+            /* Клик по миниатюре: переставляет её в главную область */
+            togglePin(id);
+        }
         return;
     }
 
-    box.classList.contains("expanded") ? collapseAll() : expandBox(box);
+    /* Не в spotlight-режиме: клик на видео → spotlight.
+       Для полноэкранного расширения (без HUD) используй кнопку expand на наведении. */
+    setSpotlight(id);
 });
 
 /* ════════════════════════════════════════════
