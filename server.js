@@ -375,6 +375,16 @@ setInterval(() => {
         if (now > v.resetAt) _createRateMap.delete(ip);
 }, 5 * 60_000);
 
+/* GET /api/room-exists?code=ABCDEF — проверяет что комната реально существует.
+   Используется инвайт-страницей до показа UI, чтобы не отображать
+   «вас пригласили» для несуществующих или поддельных кодов. */
+app.get("/api/room-exists", (req, res) => {
+    const code = sanitizeRoom(req.query?.code);
+    if (!code) return res.json({ exists: false });
+    const exists = rooms.has(code) || pendingRooms.has(code);
+    res.json({ exists });
+});
+
 app.post("/api/create-room", (req, res) => {
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
     if (!createRateOk(ip)) {

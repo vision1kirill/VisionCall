@@ -129,10 +129,46 @@ if (savedNick) {
 const urlParams = new URLSearchParams(window.location.search);
 const preRoom = urlParams.get("room");
 
+/* Допустимый формат кода комнаты: ровно 6 символов из алфавита сервера.
+   Любой другой формат — либо опечатка, либо попытка фишинга. */
+const ROOM_CODE_RE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
+
 if (preRoom) {
-    document.getElementById("homeCard").style.display = "none";
-    document.getElementById("linkCard").style.display = "";
-    document.getElementById("roomCodeDisplay").textContent = preRoom;
+    if (!ROOM_CODE_RE.test(preRoom)) {
+        /* Невалидный формат → молча редиректим на главную, не показываем инвайт */
+        window.location.replace("/");
+    } else {
+        /* Валидный формат → проверяем существование комнаты на сервере */
+        fetch("/api/room-exists?code=" + encodeURIComponent(preRoom))
+            .then(r => r.ok ? r.json() : { exists: false })
+            .then(({ exists }) => {
+                if (!exists) {
+                    /* Комната не найдена → показываем ошибку вместо инвайта */
+                    document.getElementById("homeCard").style.display = "none";
+                    const errCard = document.getElementById("linkCard");
+                    errCard.style.display = "";
+                    errCard.innerHTML = `
+                        <div class="logo-text">VisionCall</div>
+                        <p class="link-join-heading" style="color:#f87171">Комната не найдена</p>
+                        <p style="font-size:14px;color:var(--text-muted);text-align:center;margin-bottom:24px">
+                            Ссылка устарела или комната уже закрыта.
+                        </p>
+                        <a href="/" class="join-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px">
+                            На главную
+                        </a>`;
+                } else {
+                    document.getElementById("homeCard").style.display = "none";
+                    document.getElementById("linkCard").style.display = "";
+                    document.getElementById("roomCodeDisplay").textContent = preRoom;
+                }
+            })
+            .catch(() => {
+                /* Сеть недоступна — показываем инвайт, сервер дополнительно проверит при join */
+                document.getElementById("homeCard").style.display = "none";
+                document.getElementById("linkCard").style.display = "";
+                document.getElementById("roomCodeDisplay").textContent = preRoom;
+            });
+    }
 }
 
 /* ── Вспомогательные функции ── */
