@@ -880,6 +880,10 @@ function setSpotlight(id) {
     const box = document.getElementById("box-" + id);
     if (!box) return;
 
+    /* Нет смысла в spotlight если ты один — полоса миниатюр будет пустой */
+    const otherBoxes = videoGrid.querySelectorAll(".video-box:not(#box-" + id + ")");
+    if (otherBoxes.length === 0) return;
+
     pinnedId = id;
     videoGrid.classList.add("spotlight-mode");
     box.classList.add("vc-spotlight-main");

@@ -2089,6 +2089,14 @@ html.theme-transition {
     font-size: 56px;
 }
 
+/* In spotlight main, use contain so full video frame is visible.
+   This is critical for portrait phone cameras — cover would crop the sides.
+   Screen shares already use contain; cameras get it only in the main spotlight. */
+.video-box.vc-spotlight-main video {
+    object-fit: contain !important;
+    background: #000;
+}
+
 /* ═══════════════════════════════════════
    RESPONSIVE — TABLET (768px and below)
 ═══════════════════════════════════════ */
