@@ -1972,6 +1972,73 @@ html.theme-transition {
 .video-box:hover::after { display: none; }
 
 /* ═══════════════════════════════════════
+   RAISE HAND — бейдж ✋ на плитке видео
+═══════════════════════════════════════ */
+.vc-hand-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 22px;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 12;
+    opacity: 0;
+    transform: scale(0.5) translateY(8px);
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+}
+.vc-hand-badge--visible {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+/* ── Кнопка ✋ в HUD ── */
+#handBtn { position: relative; }
+
+/* Активна (рука поднята) — amber подсветка */
+#handBtn.hand-active {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.55);
+    color: #fbbf24;
+}
+#handBtn.hand-active svg { stroke: #fbbf24; }
+
+/* КД-режим (рука авто-опустилась, но кнопка ещё заблокирована) */
+#handBtn.hand-cd:not(.hand-active)::after {
+    content: attr(data-cd);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted, #94a3b8);
+    background: rgba(0,0,0,0.72);
+    border-radius: 6px;
+    padding: 2px 5px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+#handBtn.hand-cd:not(.hand-active) svg { opacity: 0.35; }
+
+/* ── Значок руки в списке участников ── */
+.participant-hand {
+    background: none;
+    border: none;
+    padding: 0 0 0 4px;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    flex-shrink: 0;
+}
+.participant-hand:hover {
+    transform: scale(1.2);
+    opacity: 1;
+}
+
+/* ═══════════════════════════════════════
    SPOTLIGHT / PIN LAYOUT
 ═══════════════════════════════════════ */
 .video-grid.spotlight-mode {

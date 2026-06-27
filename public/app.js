@@ -70,6 +70,7 @@ const ICONS = {
     labelMicOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2"/></svg>`,
     labelCamOn:  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
     labelCamOff: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/></svg>`,
+    handRaise: `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`,
 };
 
 /* Постоянный ID сессии — позволяет серверу выгнать старый "призрак"
@@ -114,6 +115,7 @@ const camBtn    = document.getElementById("camBtn");
 const flipBtn   = document.getElementById("flipBtn");
 const screenBtn = document.getElementById("screenBtn");
 const noiseBtn  = document.getElementById("noiseBtn");
+const handBtn   = document.getElementById("handBtn");
 const leaveBtn  = document.getElementById("leaveBtn");
 const chatBtn   = document.getElementById("chatBtn");
 const copyBtn   = document.getElementById("copyBtn");
@@ -380,6 +382,184 @@ fetch("/api/ice-servers")
         }
     })
     .catch(e => console.warn("[ice] fetch failed, using STUN only:", e));
+
+/* ════════════════════════════════════════════
+   ПОДНЯТЬ РУКУ
+════════════════════════════════════════════ */
+
+/* Состояние: когда локальный пользователь поднял руку (0 = не поднята) */
+let _handRaisedAt = 0;
+let _handCdInterval = null; /* интервал отсчёта КД на кнопке */
+
+const HAND_COOLDOWN_MS   = 30_000;
+const HAND_AUTO_LOWER_MS = 15_000;
+
+/* Инициализируем иконку кнопки */
+if (handBtn) handBtn.innerHTML = ICONS.handRaise;
+
+/* Воспроизведение звука поднятия руки */
+function playHandSound() {
+    try {
+        const audio = new Audio("/hands_up.mp3");
+        audio.volume = 0.6;
+        audio.play().catch(() => {}); /* игнорируем блокировку автовоспроизведения */
+    } catch (_) {}
+}
+
+/* Показать/убрать бейдж ✋ на плитке видео */
+function setHandBadge(id, raised) {
+    const box = document.getElementById("box-" + id);
+    if (!box) return;
+    let badge = box.querySelector(".vc-hand-badge");
+    if (raised) {
+        if (!badge) {
+            badge = document.createElement("div");
+            badge.className = "vc-hand-badge";
+            badge.setAttribute("aria-label", "Рука поднята");
+            badge.textContent = "✋";
+            box.appendChild(badge);
+            /* Форс-reflow для CSS-анимации появления */
+            void badge.offsetWidth;
+            badge.classList.add("vc-hand-badge--visible");
+        }
+    } else {
+        badge?.remove();
+    }
+}
+
+/* Обновить значок руки в сайдбаре участников */
+function setParticipantHand(id, raised) {
+    const el = document.getElementById("participant-" + id);
+    if (!el) return;
+    let handEl = el.querySelector(".participant-hand");
+    if (raised) {
+        if (!handEl) {
+            handEl = document.createElement("button");
+            handEl.className = "participant-hand";
+            handEl.title = "Опустить руку";
+            handEl.setAttribute("aria-label", "Опустить руку участника");
+            handEl.textContent = "✋";
+            /* Только хост может опустить чужую руку */
+            handEl.onclick = () => {
+                if (id === "local" || roomCreatorId === socket.id) {
+                    socket.emit("lower-hand", { targetId: id === "local" ? undefined : id });
+                }
+            };
+            /* Вставляем перед короной чтобы порядок был: аватар → имя → ✋ → 👑 */
+            const crown = el.querySelector(".participant-crown");
+            if (crown) el.insertBefore(handEl, crown);
+            else el.appendChild(handEl);
+        }
+    } else {
+        handEl?.remove();
+    }
+}
+
+/* Запустить КД-отсчёт на кнопке */
+function startHandCooldown() {
+    if (!handBtn) return;
+    handBtn.classList.add("hand-cd");
+    handBtn.setAttribute("aria-pressed", "true");
+
+    if (_handCdInterval) clearInterval(_handCdInterval);
+    _handCdInterval = setInterval(() => {
+        const elapsed = Date.now() - _handRaisedAt;
+        const remaining = Math.ceil((HAND_COOLDOWN_MS - elapsed) / 1000);
+
+        if (remaining <= 0) {
+            clearInterval(_handCdInterval);
+            _handCdInterval = null;
+            _handRaisedAt = 0;
+            if (handBtn) {
+                handBtn.classList.remove("hand-cd", "hand-active");
+                handBtn.setAttribute("aria-pressed", "false");
+                handBtn.dataset.cd = "";
+            }
+            return;
+        }
+        /* Показываем отсчёт только пока рука ещё поднята (первые 15с) */
+        if (elapsed < HAND_AUTO_LOWER_MS) {
+            handBtn.classList.add("hand-active");
+            handBtn.dataset.cd = "";
+        } else {
+            /* Рука уже авто-опустилась, но КД ещё идёт — показываем countdown */
+            handBtn.classList.remove("hand-active");
+            handBtn.dataset.cd = remaining + "с";
+        }
+    }, 500);
+}
+
+/* Кнопка поднятия руки */
+if (handBtn) {
+    handBtn.onclick = () => {
+        /* Если рука уже поднята — ничего (авто-опустится, или хост опустит) */
+        if (_handRaisedAt && (Date.now() - _handRaisedAt) < HAND_AUTO_LOWER_MS) return;
+
+        /* Проверяем КД */
+        if (_handRaisedAt) {
+            const rem = Math.ceil((HAND_COOLDOWN_MS - (Date.now() - _handRaisedAt)) / 1000);
+            if (rem > 0) {
+                showToast(`Подождите ещё ${rem} сек`, "error", 2000);
+                return;
+            }
+        }
+        _handRaisedAt = Date.now();
+        socket.emit("raise-hand");
+        startHandCooldown();
+    };
+}
+
+/* Alt+H — keyboard shortcut */
+document.addEventListener("keydown", e => {
+    if (e.key === "h" && e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handBtn?.click();
+    }
+});
+
+/* ── Сокет-события ── */
+
+socket.on("hand-raised", data => {
+    setHandBadge(data.id === socket.id ? "local" : data.id, true);
+    setParticipantHand(data.id === socket.id ? "local" : data.id, true);
+    playHandSound();
+    if (data.id !== socket.id) {
+        showToast(`${data.name} поднял(а) руку ✋`, "info", 4000);
+    }
+});
+
+socket.on("hand-lowered", data => {
+    const domId = data.id === socket.id ? "local" : data.id;
+    setHandBadge(domId, false);
+    setParticipantHand(domId, false);
+    /* Если это наша рука была опущена хостом до истечения авто-таймера */
+    if (data.id === socket.id && _handRaisedAt) {
+        _handRaisedAt = Date.now() - HAND_AUTO_LOWER_MS; /* сдвигаем назад чтобы КД пересчитался */
+        if (handBtn) {
+            handBtn.classList.remove("hand-active");
+            handBtn.dataset.cd = "";
+        }
+    }
+});
+
+socket.on("hand-cooldown", data => {
+    const rem = Math.ceil(data.remainingMs / 1000);
+    showToast(`Подождите ещё ${rem} сек`, "error", 2000);
+});
+
+/* Текущее состояние рук при входе в комнату */
+socket.on("hands-state", hands => {
+    hands.forEach(h => {
+        const domId = h.id === socket.id ? "local" : h.id;
+        setHandBadge(domId, true);
+        setParticipantHand(domId, true);
+    });
+});
+
+/* При выходе чистим интервал */
+window.addEventListener("pagehide", () => {
+    if (_handCdInterval) clearInterval(_handCdInterval);
+}, { once: true });
 
 /* ════════════════════════════════════════════
    УЧАСТНИКИ

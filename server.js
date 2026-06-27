@@ -360,6 +360,26 @@ app.get("/api/ice-servers", async (_req, res) => {
 const pendingRooms    = new Map(); /* roomCode → createdAt (ms) */
 const PENDING_TTL_MS  = 30 * 60 * 1000; /* 30 минут — потом вычищаем */
 
+/* ════════════════════════════════════════════
+   ПОДНЯТЫЕ РУКИ
+   roomHands:    room → Map<socketId, { raisedAt, timer }>
+   handCooldowns: socketId → raisedAt (для проверки 30с КД)
+════════════════════════════════════════════ */
+const roomHands    = new Map(); /* room → Map<socketId, { raisedAt, timer }> */
+const handCooldowns = new Map(); /* socketId → raisedAt timestamp */
+
+const HAND_AUTO_LOWER_MS = 15_000; /* авто-опускание через 15 сек */
+const HAND_COOLDOWN_MS   = 30_000; /* КД между поднятиями — 30 сек */
+
+function clearHand(room, socketId) {
+    const hands = roomHands.get(room);
+    if (!hands || !hands.has(socketId)) return false;
+    clearTimeout(hands.get(socketId).timer);
+    hands.delete(socketId);
+    if (hands.size === 0) roomHands.delete(room);
+    return true;
+}
+
 /* Rate limit для create-room — макс 5 создания в 5 минут с одного IP */
 const _createRateMap  = new Map();
 const CREATE_RATE_MAX = 5;
@@ -544,6 +564,18 @@ io.on("connection", socket => {
             creatorId: members._creator || null
         });
 
+        /* Текущее состояние поднятых рук — чтобы новый участник видел руки
+           тех кто уже поднял до его прихода */
+        const currentHands = roomHands.get(room);
+        if (currentHands && currentHands.size > 0) {
+            const handsArr = [...currentHands.entries()].map(([id, h]) => ({
+                id,
+                name: rooms.get(room)?.get(id)?.name || "Участник",
+                raisedAt: h.raisedAt
+            }));
+            socket.emit("hands-state", handsArr);
+        }
+
         members.set(socket.id, { name, avatar });
 
         /* Уведомляем остальных */
@@ -629,12 +661,75 @@ io.on("connection", socket => {
         });
     });
 
+    /* ── Поднять руку ── */
+    socket.on("raise-hand", () => {
+        const room = socket.data.room;
+        if (!room) return;
+
+        /* Проверяем КД: 30 сек с момента последнего поднятия */
+        const lastRaise = handCooldowns.get(socket.id) || 0;
+        const remaining = HAND_COOLDOWN_MS - (Date.now() - lastRaise);
+        if (remaining > 0) {
+            socket.emit("hand-cooldown", { remainingMs: remaining });
+            return;
+        }
+
+        /* Если рука уже поднята — игнорируем (двойное нажатие) */
+        const hands = roomHands.get(room);
+        if (hands && hands.has(socket.id)) return;
+
+        /* Фиксируем момент поднятия для КД */
+        handCooldowns.set(socket.id, Date.now());
+
+        /* Устанавливаем авто-опускание через 15 сек */
+        const timer = setTimeout(() => {
+            if (clearHand(room, socket.id)) {
+                io.to(room).emit("hand-lowered", { id: socket.id });
+            }
+        }, HAND_AUTO_LOWER_MS);
+
+        if (!roomHands.has(room)) roomHands.set(room, new Map());
+        roomHands.get(room).set(socket.id, { raisedAt: Date.now(), timer });
+
+        /* Порядок в очереди = размер Map после добавления */
+        const order = roomHands.get(room).size;
+        io.to(room).emit("hand-raised", {
+            id:       socket.id,
+            name:     socket.data.name || "Участник",
+            order,
+            raisedAt: Date.now()
+        });
+    });
+
+    /* ── Опустить руку ── */
+    socket.on("lower-hand", data => {
+        const room = socket.data.room;
+        if (!room) return;
+
+        const targetId = data?.targetId || socket.id;
+        const members  = rooms.get(room);
+
+        /* Чужую руку может опустить только создатель комнаты */
+        if (targetId !== socket.id) {
+            if (!members || members._creator !== socket.id) return;
+        }
+
+        if (clearHand(room, targetId)) {
+            io.to(room).emit("hand-lowered", { id: targetId });
+        }
+    });
+
     /* ── Явный выход (beforeunload на клиенте) ──
        Срабатывает ДО того как браузер закроет WebSocket.
        Позволяет мгновенно убрать призрака без ожидания ping timeout. */
     socket.on("leave-room", () => {
         const room = socket.data.room;
         if (!room) return;
+        /* Опускаем руку если была поднята */
+        if (clearHand(room, socket.id)) {
+            socket.to(room).emit("hand-lowered", { id: socket.id });
+        }
+        handCooldowns.delete(socket.id);
         socket.to(room).emit("user-disconnected", { id: socket.id });
         const members = rooms.get(room);
         if (members) {
@@ -663,6 +758,10 @@ io.on("connection", socket => {
     socket.on("disconnect", () => {
         const room = socket.data.room;
         if (room) {
+            /* Опускаем руку если была поднята */
+            if (clearHand(room, socket.id)) {
+                socket.to(room).emit("hand-lowered", { id: socket.id });
+            }
             socket.to(room).emit("user-disconnected", { id: socket.id });
             const members = rooms.get(room);
             if (members) {
@@ -687,8 +786,9 @@ io.on("connection", socket => {
             }
             console.log(`[leave] ${socket.data.name || socket.id} ← room=${room}`);
         }
-        /* Чистим rate-limit таблицу */
+        /* Чистим rate-limit и КД рук */
         rateLimits.delete(socket.id);
+        handCooldowns.delete(socket.id);
     });
 
 });
